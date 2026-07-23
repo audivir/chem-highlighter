@@ -3,36 +3,47 @@
 from __future__ import annotations
 
 import math
-import pathlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
 import pytest
+from conftest import FIXTURES
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdDistGeom
+
+from chem_highlighter.align import (
+    Flips,
+    find_mcs,
+    flip_bonds,
+    get_2d_global_flip_and_angle,
+    get_2d_mol,
+    get_alignment_flips_and_transform,
+    get_alignment_ops_from_molblock,
+    get_atom_position,
+)
+from chem_highlighter.utils import mol_from_smiles
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-from chem_highlighter.align import (
-    find_mcs,
-    flip_bonds,
-    get_2d_mol,
-    get_2d_rotation_angle,
-    get_alignment_flips_and_transform,
-    get_alignment_ops_from_molblock,
-)
-from chem_highlighter.utils import mol_from_smiles
 
-_FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+class Query(NamedTuple):
+    """A query including the expected values."""
+
+    mol: Chem.Mol
+    expected_flips: Flips
+    expected_global_flip: bool
+    expected_angle: float
 
 
 @pytest.fixture
-def ethylbenzene() -> tuple[Chem.Mol, Chem.Mol]:
+def queries() -> tuple[Query, Query, Chem.Mol]:
     """Two ethylbenzene 2D mols with the ethyl chain in different orientations."""
-    q = get_2d_mol(_FIXTURES.joinpath("ethylbenzene1.mol").read_text())
-    r = get_2d_mol(_FIXTURES.joinpath("ethylbenzene2.mol").read_text())
-    return q, r
+    q1 = Query(get_2d_mol((FIXTURES / "query1.mol").read_text()), [(6, 4), (7, 6)], True, 0.0)
+    q2 = Query(get_2d_mol((FIXTURES / "query2.mol").read_text()), [], True, 180.0)
+    r = get_2d_mol((FIXTURES / "ref.mol").read_text())
+
+    return q1, q2, r
 
 
 def _mol(smiles: str) -> tuple[Chem.Mol, str]:
@@ -66,6 +77,13 @@ def _rotation_matrix_4x4(angle_rad: float) -> NDArray[np.float64]:
     m[1, 0] = s
     m[1, 1] = c
     return m
+
+
+def test_get_atom_position() -> None:
+    mol, _ = _mol("CCC")
+    conf = mol.GetConformer()
+    pos = get_atom_position(conf, 0)
+    assert pos.z == 0
 
 
 def test_get_2d_mol() -> None:
@@ -114,25 +132,31 @@ def test_flip_bonds(smiles_q: str, smiles_r: str) -> None:
     assert flip_bonds(q, r, find_mcs(q, r)) == []
 
 
-def test_flip_bonds_detects_flipped_ethyl_chain(ethylbenzene: tuple[Chem.Mol, Chem.Mol]) -> None:
-    q, r = ethylbenzene
-    flips = flip_bonds(q, r, find_mcs(q, r))
-    assert flips == [(6, 4)]
+@pytest.mark.parametrize("query_ix", [1, 2])
+def test_flip_bonds_detects_flipped_ethyl_chain(
+    query_ix: Literal[1, 2],
+    queries: tuple[Query, Query, Chem.Mol],
+) -> None:
+    q1, q2, ref = queries
+    query = q1 if query_ix == 1 else q2
+    flips = flip_bonds(query.mol, ref, find_mcs(query.mol, ref))
+    assert flips == query.expected_flips
 
 
 @pytest.mark.parametrize(
     "theta",
     [0.0, math.pi / 6, math.pi / 4, math.pi / 3, math.pi / 2, -math.pi / 4, -math.pi / 2],
 )
-def test_get_2d_rotation_angle(theta: float) -> None:
+def test_get_2d_global_flip_and_angle(theta: float) -> None:
     # Returns -arctan2(sin θ, cos θ) = -θ.
-    result = get_2d_rotation_angle(_rotation_matrix_4x4(theta))
-    assert math.isclose(result, -theta, abs_tol=1e-10)
+    global_flip, result = get_2d_global_flip_and_angle(_rotation_matrix_4x4(theta))
+    assert not global_flip
+    assert math.isclose(result, -theta * 180 / math.pi % 360.0, abs_tol=1e-10)
 
 
-def test_get_2d_rotation_angle_raises_when_not_4x4() -> None:
+def test_get_2d_global_flip_and_angle_raises_when_not_4x4() -> None:
     with pytest.raises(ValueError, match="4x4"):
-        get_2d_rotation_angle(np.eye(3))
+        get_2d_global_flip_and_angle(np.eye(3))
 
 
 @pytest.mark.parametrize(
@@ -151,31 +175,49 @@ def test_get_alignment_flips_and_transform_noops(smiles_q: str, smiles_r: str) -
     assert flips == []
 
 
-def test_get_alignment_flips_and_transform(ethylbenzene: tuple[Chem.Mol, Chem.Mol]) -> None:
-    q, r = ethylbenzene
-    flips, transform = get_alignment_flips_and_transform(q, r)
-    assert math.isclose(get_2d_rotation_angle(transform), math.pi, abs_tol=1e-3)
-    assert flips == [(6, 4)]
+@pytest.mark.parametrize("query_ix", [1, 2])
+def test_get_alignment_flips_and_transform(
+    query_ix: Literal[1, 2],
+    queries: tuple[Query, Query, Chem.Mol],
+) -> None:
+    q1, q2, ref = queries
+    query = q1 if query_ix == 1 else q2
+    flips, transform = get_alignment_flips_and_transform(query.mol, ref)
+    global_flip, angle = get_2d_global_flip_and_angle(transform)
+    assert flips == query.expected_flips
+    assert global_flip == query.expected_global_flip
+    assert math.isclose(angle, query.expected_angle, abs_tol=1e-2)
 
 
 @pytest.mark.parametrize(
-    ("smiles_q", "smiles_r", "expected"),
+    ("smiles_q", "smiles_r", "expected_global_flip", "expected_angle"),
     [
-        ("CCO", "CCO", 0.0),
-        ("c1ccccc1", "Cc1ccccc1", 0.0),
-        ("CCCO", "CCCCO", math.pi),
+        ("CCO", "CCO", False, 0.0),
+        ("c1ccccc1", "Cc1ccccc1", False, 0.0),
+        ("CCCO", "CCCCO", True, 180.0),
     ],
 )
 def test_get_alignment_ops_from_molblock_noops(
-    smiles_q: str, smiles_r: str, expected: float
+    smiles_q: str, smiles_r: str, expected_global_flip: bool, expected_angle: float
 ) -> None:
-    flips, angle = get_alignment_ops_from_molblock(_mol(smiles_q)[1], _mol(smiles_r)[1])
+    flips, global_flip, angle = get_alignment_ops_from_molblock(
+        _mol(smiles_q)[1], _mol(smiles_r)[1]
+    )
     assert flips == []
-    assert math.isclose(np.abs(angle), expected, abs_tol=1e-2)
+    assert global_flip == expected_global_flip
+    assert math.isclose(np.abs(angle), expected_angle, abs_tol=1e-1)
 
 
-def test_get_alignment_ops_from_molblock_ethyl(ethylbenzene: tuple[Chem.Mol, Chem.Mol]) -> None:
-    q, r = ethylbenzene
-    flips, angle = get_alignment_ops_from_molblock(Chem.MolToMolBlock(q), Chem.MolToMolBlock(r))
-    assert flips == [(6, 4)]
-    assert math.isclose(angle, math.pi, abs_tol=1e-3)
+@pytest.mark.parametrize("query_ix", [1, 2])
+def test_get_alignment_ops_from_molblock_ethyl(
+    query_ix: Literal[1, 2],
+    queries: tuple[Query, Chem.Mol, Query],
+) -> None:
+    q1, q2, ref = queries
+    query = q1 if query_ix == 1 else q2
+    flips, global_flip, angle = get_alignment_ops_from_molblock(
+        Chem.MolToMolBlock(query.mol), Chem.MolToMolBlock(ref)
+    )
+    assert flips == query.expected_flips
+    assert global_flip == query.expected_global_flip
+    assert math.isclose(angle, query.expected_angle, abs_tol=1e-2)

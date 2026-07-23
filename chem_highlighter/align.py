@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import math
+from typing import TYPE_CHECKING, Literal, NamedTuple, TypeAlias
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -16,6 +17,22 @@ logger = logging.getLogger(__name__)
 
 ALIGN_WEIGHT_DEFAULT = 1
 ALIGN_WEIGHT_MAP = {1: 0.1, 6: 1}
+
+Flip: TypeAlias = tuple[int, int]
+Flips: TypeAlias = list[Flip]
+
+
+class Position3D(NamedTuple):
+    """A 3D position."""
+
+    x: float
+    y: float
+    z: float
+
+
+def get_atom_position(conf: Chem.Conformer, ix: int) -> Position3D:
+    """Get the 3D position of atom at `ix` of the conformer `conf`."""
+    return Position3D(*conf.GetAtomPosition(ix))
 
 
 def get_2d_mol(molblock_or_mol: str | Chem.Mol) -> Chem.Mol:
@@ -30,14 +47,17 @@ def get_2d_mol(molblock_or_mol: str | Chem.Mol) -> Chem.Mol:
         mol = molblock_or_mol
     else:
         maybe_mol: Chem.Mol | None = Chem.MolFromMolBlock(molblock_or_mol, removeHs=False)
+
         if not maybe_mol:
             raise ValueError("Invalid molblock")
+
         mol = maybe_mol
+
     try:
         conf = mol.GetConformer()
     except ValueError as e:
         raise ValueError("No coordinates available for molecule") from e
-    if any(conf.GetAtomPosition(ix).z != 0.0 for ix in range(conf.GetNumAtoms())):
+    if any(get_atom_position(conf, ix).z != 0.0 for ix in range(conf.GetNumAtoms())):
         raise ValueError("Molecule is a 3D molecule")
     return mol
 
@@ -47,6 +67,9 @@ def find_mcs(query: Chem.Mol, reference: Chem.Mol) -> dict[int, int]:
 
     Returns:
         A mapping between the corresponding atom indices for query and reference, respectively.
+
+    Raises:
+        ValueError if no common substructure is found.
     """
     from rdkit import Chem
     from rdkit.Chem import rdFMCS
@@ -135,8 +158,10 @@ def flip_bonds(
 
     # safety: force all Z-coordinates back to 0.0
     for ix in range(query.GetNumAtoms()):
-        pos = conf_q.GetAtomPosition(ix)
-        conf_q.SetAtomPosition(ix, (pos.x, pos.y, 0.0))
+        pos = get_atom_position(conf_q, ix)
+        if not math.isclose(pos.z, 0.0, abs_tol=1e-4):  # pragma: no cover
+            logger.warning("Flipping resulted in a non-zero z-coordinate, resetting...")
+        conf_q.SetAtomPosition(ix, pos._replace(z=0.0))
 
     return flips
 
@@ -169,7 +194,9 @@ def get_alignment_flips_and_transform(
     return flips, transform
 
 
-def get_2d_rotation_angle(matrix: NDArray[np.float64], tol: float = 1e-5) -> float:
+def get_2d_global_flip_and_angle(
+    matrix: NDArray[np.float64], tol: float = 1e-5
+) -> tuple[Literal[-1, 0, 1], float]:
     """Extract the 2D rotation angle from a 4x4 matrix.
 
     Arguments:
@@ -177,57 +204,62 @@ def get_2d_rotation_angle(matrix: NDArray[np.float64], tol: float = 1e-5) -> flo
         tol: Tolerance to match our constraints.
 
     Returns:
-        rotation angle in radians
+        A tuple whether a x-axis (+1), y-axis (-1) or no (0) global flip is necessary
+        and the rotation angle based on the reference molecule in degrees.
 
     Raises:
-        ValueError if the matrix contains 3D rotations, shearing, or scaling.
+        ValueError if the matrix is not 4x4.
     """
     import numpy as np
 
     if matrix.shape != (4, 4):
         raise ValueError("Matrix must be exactly 4x4.")
 
-    zero_indices = [
-        (0, 2),
-        (1, 2),  # Z does not affect X or Y
-        (2, 0),
-        (2, 1),  # X or Y do not affect Z
-        (3, 0),
-        (3, 1),
-        (3, 2),  # Bottom row must be [0, 0, 0, 1]
-    ]
+    m_2d = matrix[:2, :2]
 
-    fixed_matrix = [matrix[row, col] for row, col in zero_indices] + [
-        matrix[2, 2],
-        matrix[3, 3],
-    ]
-    target_matrix = [0.0] * len(zero_indices) + [1.0, 1.0]
+    # Check that there is no coupling between XY and Z.
+    m_3d = matrix[:3, :3]
+    if not np.allclose(m_3d[:2, 2], 0, atol=tol) or not np.allclose(
+        m_3d[2, :2], 0, atol=tol
+    ):  # pragma: no cover
+        logger.warning("Matrix contains out-of-plane rotation components.")
 
-    det = (matrix[0, 0] * matrix[1, 1]) - (matrix[0, 1] * matrix[1, 0])
-    fixed_matrix += [matrix[0, 0], matrix[1, 0], det]
-    target_matrix += [matrix[1, 1], -matrix[0, 1], 1.0]
+    det = np.linalg.det(m_2d)
 
-    if not np.allclose(fixed_matrix, target_matrix, atol=tol):
-        logger.warning(
-            "Matrix contains scaling, shearing, non-uniform scaling, 3D rotations,"
-            " Z-axis scaling or invalid homogeneous scaling."
-        )
+    global_flip: Literal[-1, 0, 1] = 0
+    # Remove a reflection, if present, before extracting the angle.
+    if det < 0:
+        flip_x = m_2d @ np.diag([1, -1])
+        flip_y = m_2d @ np.diag([-1, 1])
 
-    return float(-np.arctan2(matrix[1, 0], matrix[0, 0]))
+        if np.isclose(np.linalg.det(flip_x), 1.0, atol=tol):
+            global_flip = 1
+            m_2d = flip_x
+
+        elif np.isclose(np.linalg.det(flip_y), 1.0, atol=tol):
+            global_flip = -1
+            m_2d = flip_y
+        else:
+            raise ValueError("Unknown reflection")
+
+    angle_rad = -np.arctan2(m_2d[1, 0], m_2d[0, 0])
+
+    return global_flip, float(np.degrees(angle_rad) % 360.0)
 
 
 def get_alignment_ops_from_molblock(
     query_mol: str, reference_mol: str
-) -> tuple[list[tuple[int, int]], float]:
+) -> tuple[list[tuple[int, int]], Literal[-1, 0, 1], float]:
     """Finds the necessary flips and rotation angle to align two molecules as Mol blocks.
 
     Returns:
         A tuple with a list of necessary flips around rotatable bonds
-        (each described by a bond index and an anchor atom index)
-        and the rotation angle based on the reference molecule in radians.
+        (each described by a bond index and an anchor atom index),
+        whether a x-axis (+1), y-axis (-1) or no (0) global flip is necessary
+        and the rotation angle based on the reference molecule in degrees.
     """
     query = get_2d_mol(query_mol)
     reference = get_2d_mol(reference_mol)
     flips, transform = get_alignment_flips_and_transform(query, reference)
-    angle = get_2d_rotation_angle(transform)
-    return flips, angle
+    global_flip, angle = get_2d_global_flip_and_angle(transform)
+    return flips, global_flip, angle

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import msgspec
 import pytest
+from conftest import FIXTURES
 from rdkit import Chem
 
 from chem_highlighter.backend.rdkit import RDKitDocument
 from chem_highlighter.hml import HML
-from chem_highlighter.utils import mol_from_smiles
+from chem_highlighter.utils import is_same_conformer, mol_from_smiles
 
 
 def _doc(smiles: str) -> RDKitDocument:
@@ -131,8 +132,18 @@ def test_cleanup_after_align_logs_warning(caplog: pytest.LogCaptureFixture) -> N
     assert "Alignment" in caplog.text
 
 
-def test_align_to_reference() -> None:
-    doc = _doc("CCO")
-    ref = _doc("CCO")
+def show(s: str) -> None:
+    import subprocess
+
+    p = subprocess.Popen(["kv"], stdin=subprocess.PIPE)
+    p.communicate(input=s.encode())
+
+
+@pytest.mark.parametrize("query_file", ["query1.mol", "query2.mol"])
+def test_align_to_reference(query_file: str) -> None:
+    doc = RDKitDocument.from_molblock((FIXTURES / query_file).read_text())
+    ref = RDKitDocument.from_molblock((FIXTURES / "ref.mol").read_text())
     doc.align_to_reference(ref.to_molblock())
-    assert doc._aligned  # noqa: SLF001
+    show(doc.to_svg())
+    show(ref.to_svg())
+    assert is_same_conformer(doc.to_molblock(), ref.to_molblock())
