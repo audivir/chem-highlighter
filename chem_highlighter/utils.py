@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, NamedTuple, TypeAlias
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from rdkit import Chem
+
+logger = logging.getLogger()
 
 RGBA: TypeAlias = tuple[float, float, float, float]  # pragma: no cover
 
@@ -101,3 +104,77 @@ def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
     hex_color = palette[group_ix]
     r, g, b = [int(x * 255) for x in mpl.colors.hex2color(hex_color)]
     return f"\033[38;2;{r};{g};{b}m"
+
+
+def is_same_conformer(  # noqa: PLR0911
+    molblock_a: str,
+    molblock_b: str,
+    atol: float = 1e-3,
+) -> bool:
+    """Are two molblocks the same conformer."""
+    import numpy as np
+    from rdkit import Chem
+    from scipy.optimize import linear_sum_assignment
+    from scipy.spatial.distance import cdist
+
+    mol_a: Chem.Mol | None = Chem.MolFromMolBlock(molblock_a, removeHs=False)
+    mol_b: Chem.Mol | None = Chem.MolFromMolBlock(molblock_b, removeHs=False)
+
+    if not mol_a or not mol_b:
+        raise ValueError("Invalid molblocks")
+
+    if Chem.MolToSmiles(mol_a) != Chem.MolToSmiles(mol_b):
+        logger.error("Non-identical molecules")
+        return False
+
+    # Basic topology
+    if mol_a.GetNumAtoms() != mol_b.GetNumAtoms() or mol_a.GetNumBonds() != mol_b.GetNumBonds():
+        logger.error("Non-identical number of atoms or bonds")
+        return False
+
+    conf_a = mol_a.GetConformer()
+    conf_b = mol_b.GetConformer()
+
+    pos_a = np.array(conf_a.GetPositions())
+    pos_b = np.array(conf_b.GetPositions())
+
+    # Cost matrix of distances
+    cost_matrix = cdist(pos_a, pos_b)
+
+    # Find minimum-cost one-to-one assignment
+    rows, cols = linear_sum_assignment(cost_matrix)
+
+    mapping = {int(c): int(r) for c, r in zip(cols, rows, strict=True)}  # expected -> actual
+
+    max_dist = max(cost_matrix[rows, cols])
+    if max_dist >= atol:
+        logger.error("Positions off by %f", max_dist)
+        return False
+
+    for exp_idx, act_idx in mapping.items():
+        atom_a = mol_a.GetAtomWithIdx(act_idx)
+        atom_b = mol_b.GetAtomWithIdx(exp_idx)
+
+        atom_data_a, atom_data_b = [
+            (a.GetAtomicNum(), a.GetIsAromatic(), a.GetFormalCharge()) for a in (atom_a, atom_b)
+        ]
+        if atom_data_a != atom_data_b:
+            logger.error("Non-identical atom data: %s != %s", atom_data_a, atom_data_b)
+            return False
+
+    for bond in get_bonds(mol_b):
+        a1 = mapping[bond.GetBeginAtomIdx()]
+        a2 = mapping[bond.GetEndAtomIdx()]
+
+        other: Chem.Bond | None = mol_a.GetBondBetweenAtoms(a1, a2)
+        if not other:
+            logger.error("No bond found")
+            return False
+
+        bond_data_a, bond_data_b = [(b.GetBondType(), b.GetIsAromatic()) for b in (bond, other)]
+
+        if bond_data_a != bond_data_b:
+            logger.error("Non-identical bond data: %s != %s", bond_data_a, bond_data_b)
+            return False
+
+    return True

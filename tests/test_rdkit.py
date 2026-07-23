@@ -132,18 +132,9 @@ def test_cleanup_after_align_logs_warning(caplog: pytest.LogCaptureFixture) -> N
     assert "Alignment" in caplog.text
 
 
-def show(s: str) -> None:
-    import subprocess
-
-    p = subprocess.Popen(["kv"], stdin=subprocess.PIPE)
-    p.communicate(input=s.encode())
-
-
 @pytest.mark.parametrize("query_file", ["query1.mol", "query2.mol"])
 def test_align_to_reference(query_file: str) -> None:
     doc = RDKitDocument.from_molblock((FIXTURES / query_file).read_text())
     ref = RDKitDocument.from_molblock((FIXTURES / "ref.mol").read_text())
     doc.align_to_reference(ref.to_molblock())
-    show(doc.to_svg())
-    show(ref.to_svg())
     assert is_same_conformer(doc.to_molblock(), ref.to_molblock())
