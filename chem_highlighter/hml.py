@@ -136,7 +136,7 @@ class HighlightBackendDocument(ABC):
         """Run after hydrogen options are set by `set_hydrogen_display`."""
 
     @abstractmethod
-    def highlight_from_json_callback(self, hml_json: str) -> None:
+    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
         """Run after highlighting options are set by `highlight_from_json`."""
 
     def to_hmol_json(self) -> str:
@@ -151,7 +151,7 @@ class HighlightBackendDocument(ABC):
         """Show or hide featureless and non-highlighted hydrogens."""
         self.set_hydrogen_display_callback(show_hydrogens)
 
-    def highlight_from_json(self, hml_json: str) -> None:
+    def highlight_from_json(self, hml_json: str, show_hydrogens: bool | None) -> None:
         """Set the underlying highlighting options and run the backend's callback."""
         self.hml = msgspec.json.Decoder(HML).decode(hml_json)
-        self.highlight_from_json_callback(hml_json)
+        self.highlight_from_json_callback(hml_json, show_hydrogens)

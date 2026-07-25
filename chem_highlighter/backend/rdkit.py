@@ -241,8 +241,10 @@ class RDKitDocument(HighlightBackendDocument):
             self.mol = Chem.RemoveHs(self.mol, rhps)
 
     @override
-    def highlight_from_json_callback(self, hml_json: str) -> None:
+    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
         """Do nothing as highlighting occurs during visualization only."""
+        if show_hydrogens is not None:
+            self.set_hydrogen_display(show_hydrogens)
 
     @override
     def to_console(self, canonical: bool = True) -> str:
