@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal, Self, TypeAlias, override
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import matplotlib as mpl
+from typing_extensions import Self, override
 
 from chem_highlighter.align import get_alignment_flips_and_transform
 from chem_highlighter.backend.map_tokens import map_smiles_tokens

@@ -107,8 +107,8 @@ def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
 
 
 def is_same_conformer(  # noqa: PLR0911
-    molblock_a: str,
-    molblock_b: str,
+    mol_or_molblock_a: Chem.Mol | str,
+    mol_or_molblock_b: Chem.Mol | str,
     atol: float = 1e-3,
 ) -> bool:
     """Are two molblocks the same conformer."""
@@ -117,8 +117,16 @@ def is_same_conformer(  # noqa: PLR0911
     from scipy.optimize import linear_sum_assignment
     from scipy.spatial.distance import cdist
 
-    mol_a: Chem.Mol | None = Chem.MolFromMolBlock(molblock_a, removeHs=False)
-    mol_b: Chem.Mol | None = Chem.MolFromMolBlock(molblock_b, removeHs=False)
+    mol_a: Chem.Mol | None = (
+        Chem.MolFromMolBlock(mol_or_molblock_a, removeHs=False)
+        if isinstance(mol_or_molblock_a, str)
+        else mol_or_molblock_a
+    )
+    mol_b: Chem.Mol | None = (
+        Chem.MolFromMolBlock(mol_or_molblock_b, removeHs=False)
+        if isinstance(mol_or_molblock_b, str)
+        else mol_or_molblock_b
+    )
 
     if not mol_a or not mol_b:
         raise ValueError("Invalid molblocks")
@@ -140,6 +148,20 @@ def is_same_conformer(  # noqa: PLR0911
 
     # Cost matrix of distances
     cost_matrix = cdist(pos_a, pos_b)
+
+    # Apply Scoring Function:
+    # Add a massive penalty for any atom pair that is chemically incompatible.
+    # This prevents linear_sum_assignment from pairing a Carbon with an Oxygen
+    # just because they are close in space.
+    penalty = 1e7
+    for i, atom_a in enumerate(mol_a.GetAtoms()):
+        for j, atom_b in enumerate(mol_b.GetAtoms()):
+            if (
+                atom_a.GetAtomicNum() != atom_b.GetAtomicNum()
+                or atom_a.GetIsAromatic() != atom_b.GetIsAromatic()
+                or atom_a.GetFormalCharge() != atom_b.GetFormalCharge()
+            ):
+                cost_matrix[i, j] += penalty
 
     # Find minimum-cost one-to-one assignment
     rows, cols = linear_sum_assignment(cost_matrix)
