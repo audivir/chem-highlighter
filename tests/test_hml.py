@@ -72,7 +72,7 @@ def test_to_hmol_json_with_hml() -> None:
 
     doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
     hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode())
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
     assert doc.hml is not None
     json_str = doc.to_hmol_json()
     # Palette must be serialised into the JSON
@@ -85,6 +85,6 @@ def test_highlight_from_json() -> None:
 
     doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
     hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode())
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
     assert doc.hml is not None
     assert doc.hml.palette == ["#ff0000"]

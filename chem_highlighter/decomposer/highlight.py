@@ -281,8 +281,7 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
     )
 
     new_doc = backend.from_molblock(doc.to_molblock())
-    new_doc.highlight_from_json(msgspec.json.encode(hml).decode())
-    new_doc.set_hydrogen_display(False)
+    new_doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
 
     return new_doc
 

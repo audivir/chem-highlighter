@@ -53,7 +53,7 @@ def test_to_svg_with_atom_and_bond_highlights() -> None:
         highlighted_bonds={0: 0},
         palette=["#ff0000"],
     )
-    doc.highlight_from_json(msgspec.json.encode(hml).decode())
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
     svg = doc.to_svg()
     assert "<svg" in svg
 
@@ -66,7 +66,7 @@ def test_to_svg_with_ring_highlights() -> None:
         rings=[[0, 1, 2, 3, 4, 5]],
         palette=["#ff0000"],
     )
-    doc.highlight_from_json(msgspec.json.encode(hml).decode())
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
     svg = doc.to_svg()
     assert "<svg" in svg
 
@@ -83,7 +83,7 @@ def test_to_console() -> None:
         highlighted_bonds={0: 1},
         palette=["#ff0000", "#00ff00"],
     )
-    doc.highlight_from_json(msgspec.json.encode(hml).decode())
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
     assert doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1ccc\033[38;2;255;0;0m(C)\033[0mcc1"
 
 
