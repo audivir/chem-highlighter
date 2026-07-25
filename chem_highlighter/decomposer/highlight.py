@@ -240,7 +240,7 @@ def convert_decomposed_to_hml(
     return HML.from_multicolor(atoms, bonds, rings, list(rings_ixs))
 
 
-def highlight_rgroups(  # noqa: PLR0913
+def highlight_rgroups(  # noqa: PLR0913,PLR0917
     groups: dict[str, Chem.Mol],
     lbls: list[str],
     mol: Mol,

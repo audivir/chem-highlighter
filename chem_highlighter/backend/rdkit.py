@@ -229,7 +229,7 @@ class RDKitDocument(HighlightBackendDocument):
             SanitizeMol(self.mol, Chem.SANITIZE_SETAROMATICITY)
 
     @override
-    def set_hydrogen_display(self, show_hydrogens: bool) -> None:
+    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
         """Show or hide featureless and non-highlighted hydrogens."""
         from rdkit import Chem
 

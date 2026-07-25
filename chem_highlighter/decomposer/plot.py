@@ -128,7 +128,7 @@ def fix_decomposed(
     return decomposed, rdata
 
 
-def plot_decomposed(  # noqa: PLR0913
+def plot_decomposed(  # noqa: PLR0913,PLR0917
     decomposed: DecomposedList,
     equivalents: Sequence[tuple[int, int]] | None = None,
     # sub_img_size: tuple[int, int] = (250, 200),# noqa: ERA001

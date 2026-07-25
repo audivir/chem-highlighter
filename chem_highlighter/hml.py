@@ -132,8 +132,8 @@ class HighlightBackendDocument(ABC):
         """Kekulize or dekekulize the underlying molecule."""
 
     @abstractmethod
-    def set_hydrogen_display(self, show_hydrogens: bool) -> None:
-        """Show or hide featureless and non-highlighted hydrogens."""
+    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
+        """Run after hydrogen options are set by `set_hydrogen_display`."""
 
     @abstractmethod
     def highlight_from_json_callback(self, hml_json: str) -> None:
@@ -146,6 +146,10 @@ class HighlightBackendDocument(ABC):
             for field in self.hml.__struct_fields__:
                 setattr(hmol, field, getattr(self.hml, field))
         return msgspec.json.encode(hmol).decode()
+
+    def set_hydrogen_display(self, show_hydrogens: bool) -> None:
+        """Show or hide featureless and non-highlighted hydrogens."""
+        self.set_hydrogen_display_callback(show_hydrogens)
 
     def highlight_from_json(self, hml_json: str) -> None:
         """Set the underlying highlighting options and run the backend's callback."""
