@@ -1,3 +1,5 @@
+"""Test the chem_highlighter.modify module."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -13,11 +15,11 @@ from chem_highlighter.modify import apply_transform, flip_bond, make_transform
 from chem_highlighter.utils import is_same_conformer
 
 if TYPE_CHECKING:
-    from rdkit import Chem
+    from numpy.typing import NDArray
 
 
 @pytest.mark.parametrize(
-    "flip_horizontal, flip_vertical, expected_matrix",
+    ("flip_horizontal", "flip_vertical", "expected_matrix"),
     [
         # flip_horizontal=True, flip_vertical=True
         (
@@ -46,7 +48,9 @@ if TYPE_CHECKING:
     ],
     ids=["flip_horizontal_and_vertical", "flip_vertical_only", "flip_horizontal_only", "no_flips"],
 )
-def test_make_transform_flips_only(flip_horizontal, flip_vertical, expected_matrix):
+def test_make_transform_flips_only(
+    flip_horizontal: bool, flip_vertical: bool, expected_matrix: NDArray[np.float64]
+) -> None:
     """Test standard axis inversions without any Z-axis rotations."""
     transform = make_transform(
         angle_deg=0.0, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
@@ -55,7 +59,7 @@ def test_make_transform_flips_only(flip_horizontal, flip_vertical, expected_matr
 
 
 @pytest.mark.parametrize(
-    "angle_deg, flip_horizontal, flip_vertical, expected_matrix",
+    ("angle_deg", "flip_horizontal", "flip_vertical", "expected_matrix"),
     [
         # 90 deg, flip_horizontal=True, flip_vertical=True
         (
@@ -241,7 +245,12 @@ def test_make_transform_flips_only(flip_horizontal, flip_vertical, expected_matr
         "12_5deg_no_flips",
     ],
 )
-def test_make_transform_with_angles(angle_deg, flip_horizontal, flip_vertical, expected_matrix):
+def test_make_transform_with_angles(
+    angle_deg: float,
+    flip_horizontal: bool,
+    flip_vertical: bool,
+    expected_matrix: NDArray[np.float64],
+) -> None:
     """Test axis inversions stacked with Z-axis angular rotations."""
     result = make_transform(
         angle_deg=angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical

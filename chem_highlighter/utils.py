@@ -19,6 +19,14 @@ GREEN_COLOR = "\033[92m"
 RESET_COLOR = "\033[0m"
 
 
+class Position3D(NamedTuple):
+    """A 3D position."""
+
+    x: float
+    y: float
+    z: float
+
+
 class SmilesMolPair(NamedTuple):
     """Tuple to hold SMILES string and RDKit molecule."""
 
@@ -106,7 +114,24 @@ def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
     return f"\033[38;2;{r};{g};{b}m"
 
 
-def is_same_conformer(  # noqa: PLR0911
+def are_atoms_equal(atom_a: Chem.Atom, atom_b: Chem.Atom) -> bool:
+    """Whether to atoms have the same atomic number, aromaticity and charge."""
+    return (
+        atom_a.GetAtomicNum() == atom_b.GetAtomicNum()
+        and atom_a.GetIsAromatic() == atom_b.GetIsAromatic()
+        and atom_a.GetFormalCharge() == atom_b.GetFormalCharge()
+    )
+
+
+def are_bonds_equal(bond_a: Chem.Bond, bond_b: Chem.Bond) -> bool:
+    """Whether to bonds have the same bond type and aromaticity."""
+    return (
+        bond_a.GetBondType() == bond_b.GetBondType()
+        and bond_a.GetIsAromatic() == bond_b.GetIsAromatic()
+    )
+
+
+def is_same_conformer(  # noqa: C901,PLR0911
     mol_or_molblock_a: Chem.Mol | str,
     mol_or_molblock_b: Chem.Mol | str,
     atol: float = 1e-3,
@@ -154,13 +179,9 @@ def is_same_conformer(  # noqa: PLR0911
     # This prevents linear_sum_assignment from pairing a Carbon with an Oxygen
     # just because they are close in space.
     penalty = 1e7
-    for i, atom_a in enumerate(mol_a.GetAtoms()):
-        for j, atom_b in enumerate(mol_b.GetAtoms()):
-            if (
-                atom_a.GetAtomicNum() != atom_b.GetAtomicNum()
-                or atom_a.GetIsAromatic() != atom_b.GetIsAromatic()
-                or atom_a.GetFormalCharge() != atom_b.GetFormalCharge()
-            ):
+    for i, atom_a in enumerate(get_atoms(mol_a)):
+        for j, atom_b in enumerate(get_atoms(mol_b)):
+            if not are_atoms_equal(atom_a, atom_b):
                 cost_matrix[i, j] += penalty
 
     # Find minimum-cost one-to-one assignment
@@ -177,11 +198,8 @@ def is_same_conformer(  # noqa: PLR0911
         atom_a = mol_a.GetAtomWithIdx(act_idx)
         atom_b = mol_b.GetAtomWithIdx(exp_idx)
 
-        atom_data_a, atom_data_b = [
-            (a.GetAtomicNum(), a.GetIsAromatic(), a.GetFormalCharge()) for a in (atom_a, atom_b)
-        ]
-        if atom_data_a != atom_data_b:
-            logger.error("Non-identical atom data: %s != %s", atom_data_a, atom_data_b)
+        if not are_atoms_equal(atom_a, atom_b):
+            logger.error("Non-identical atom data")
             return False
 
     for bond in get_bonds(mol_b):
@@ -193,10 +211,8 @@ def is_same_conformer(  # noqa: PLR0911
             logger.error("No bond found")
             return False
 
-        bond_data_a, bond_data_b = [(b.GetBondType(), b.GetIsAromatic()) for b in (bond, other)]
-
-        if bond_data_a != bond_data_b:
-            logger.error("Non-identical bond data: %s != %s", bond_data_a, bond_data_b)
+        if not are_bonds_equal(bond, other):
+            logger.error("Non-identical bond data")
             return False
 
     return True

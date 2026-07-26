@@ -25,7 +25,6 @@ def assert_mols_equal(result: Chem.Mol | str, expected: Chem.Mol | str) -> None:
     )
 
 
-
 def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
     import tempfile
     import webbrowser
@@ -120,6 +119,6 @@ def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
 
     webbrowser.open(path.as_uri())
 
-    breakpoint()
+    breakpoint()  # noqa: T100
 
     path.unlink(missing_ok=True)
