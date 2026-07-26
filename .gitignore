@@ -15,6 +15,7 @@ build/
 target/
 __handlers__
 
+.benchmarks
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
