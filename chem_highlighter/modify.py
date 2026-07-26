@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import msgspec
 from rdkit.Chem.rdMolTransforms import TransformConformer
@@ -15,6 +15,14 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
     from rdkit import Chem
+
+
+class Position3D(NamedTuple):
+    """A 3D position."""
+
+    x: float
+    y: float
+    z: float
 
 
 class AtomState(msgspec.Struct):
@@ -88,15 +96,15 @@ class AtomState(msgspec.Struct):
 def make_transform(
     angle_deg: float = 0.0,
     *,
-    flip_x: bool = False,
-    flip_y: bool = False,
+    flip_horizontal: bool = False,
+    flip_vertical: bool = False,
 ) -> NDArray[np.float64]:
-    """Create a 2D transform matrix (rotation + optional reflections).
+    """Create a 2D transform matrix.
 
     Args:
-        angle_deg: The rotation angle in degrees for a counterclockwise rotation.
-        flip_x: Whether to flip horizontally.
-        flip_y: Whether to flip vertically.
+        angle_deg: Counterclockwise rotation angle in degrees.
+        flip_horizontal: Mirror about the vertical axis.
+        flip_vertical: Mirror about the horizontal axis.
     """
     import numpy as np
 
@@ -110,50 +118,69 @@ def make_transform(
             [-s, c, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0],
-        ],
+        ]
     )
 
-    if flip_y:
-        # 180-deg rotation around Z-axis (Negates X and Y)
-        matrix[0, :2] *= -1.0
-        matrix[1, :2] *= -1.0
+    Rx180 = np.array(
+        [
+            [1, 0, 0, 0],
+            [0, -1, 0, 0],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1],
+        ]
+    )
 
-    if flip_x:
-        # 180-deg rotation around X-axis (Negates Y and Z)
-        matrix[1, :2] *= -1.0
-        matrix[2, 2] = -1.0
+    Ry180 = np.array(
+        [
+            [-1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, -1, 0],
+            [0, 0, 0, 1],
+        ]
+    )
+
+    if flip_horizontal:
+        matrix = matrix @ Ry180
+
+    if flip_vertical:
+        matrix = matrix @ Rx180
+
+    # if flip_horizontal:
+    #     # 180° rotation about Z (equivalent to a horizontal flip in 2D)
+    #     matrix[0, :2] *= -1.0
+    #     matrix[1, :2] *= -1.0
+
+    # if flip_vertical:
+    #     # 180° rotation about X (equivalent to a vertical flip in 2D)
+    #     matrix[1, :2] *= -1.0
+    #     matrix[2, 2] = -1.0
 
     return matrix
 
 
 def apply_transform(
-    mol: Chem.Mol, angle_deg: float, *, flip_x: bool = False, flip_y: bool = False
+    mol: Chem.Mol, angle_deg: float, *, flip_horizontal: bool = False, flip_vertical: bool = False
 ) -> Chem.Mol:
     """Rotate and/or mirror a (flat, z=0) conformer within its own plane.
 
-    make_transform's flip_x/flip_y build 180-deg rotations about the X- and
-    Z-axis, which only reduce to a plain horizontal mirror (negate X, keep Y)
-    when *both* are set together; a lone flip_y instead negates both X and Y.
-    Translate the public "mirror across X/Y" flags accordingly before
-    building the matrix.
-
-    The result is re-centered so its bounding box sits on the origin
-    afterwards, matching the convention used by mol files exported from
-    drawing tools (their bounding box is always centered on the origin,
-    regardless of rotation).
+    Args:
+        angle_deg: Counterclockwise rotation angle in degrees.
+        flip_horizontal: Mirror about the vertical axis.
+        flip_vertical: Mirror about the horizontal axis.
     """
     import numpy as np
     from rdkit import Chem
 
     mol = Chem.Mol(mol)
     conf = mol.GetConformer()
-    matrix = make_transform(angle_deg, flip_x=flip_x != flip_y, flip_y=flip_y)
+    matrix = make_transform(angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical)
     TransformConformer(conf, matrix)
 
     positions = np.array(conf.GetPositions())
     center = (positions.min(axis=0) + positions.max(axis=0)) / 2.0
-    for i, pos in enumerate(positions - center):
-        conf.SetAtomPosition(i, tuple(float(v) for v in pos))
+    new_positions = [Position3D(*p) for p in positions - center]
+    for i, new_pos in enumerate(new_positions):
+        conf.SetAtomPosition(i, new_pos)
 
     return mol
 
@@ -206,7 +233,7 @@ def flip_bond(
     neighbors_b = [n.GetIdx() for n in atom_b.GetNeighbors() if n.GetIdx() != idx_c]
     neighbors_c = [n.GetIdx() for n in atom_c.GetNeighbors() if n.GetIdx() != idx_b]
 
-    if not neighbors_b or not neighbors_c:
+    if not neighbors_b:
         raise ValueError("Anchor atom has no suitable neighboring atom")
     if not neighbors_c:
         raise ValueError("Rotating atom has no suitable neighboring atom")

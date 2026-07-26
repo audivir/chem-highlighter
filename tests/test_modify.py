@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from conftest import from_fixture_molblock
+from rdkit import Chem
+from rdkit.Chem.rdDepictor import Compute2DCoords
+from rdkit.Chem.rdmolops import Kekulize
 
 from chem_highlighter.modify import apply_transform, flip_bond, make_transform
 from chem_highlighter.utils import is_same_conformer
@@ -113,76 +116,64 @@ def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
 
 
 @pytest.mark.parametrize(
-    "flip_x, flip_y, expected_matrix",
+    "flip_horizontal, flip_vertical, expected_matrix",
     [
-        # flip_x=True, flip_y=True (Stacks Z-axis then X-axis 180-deg rotations)
+        # flip_horizontal=True, flip_vertical=True
         (
             True,
             True,
-            np.array(
-                [
-                    [-1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, -1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            ),
+            np.diag([-1.0, -1.0, 1.0, 1.0]),
         ),
-        # flip_y=True (180-deg around Z-axis)
+        # flip_vertical=True (180-deg around Z-axis)
         (
             False,
             True,
-            np.array(
-                [
-                    [-1.0, 0.0, 0.0, 0.0],
-                    [0.0, -1.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            ),
+            np.diag([1.0, -1.0, -1.0, 1.0]),
         ),
-        # flip_x=True (180-deg around X-axis)
+        # flip_horizontal=True (180-deg around X-axis)
         (
             True,
             False,
-            np.array(
-                [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, -1.0, 0.0, 0.0],
-                    [0.0, 0.0, -1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            ),
+            np.diag([-1.0, 1.0, -1.0, 1.0]),
         ),
         # No flips (Identity)
         (
             False,
             False,
+            np.diag([1.0, 1.0, 1.0, 1.0]),
+        ),
+    ],
+    ids=["flip_horizontal_and_vertical", "flip_vertical_only", "flip_horizontal_only", "no_flips"],
+)
+def test_make_transform_flips_only(flip_horizontal, flip_vertical, expected_matrix):
+    """Test standard axis inversions without any Z-axis rotations."""
+    transform = make_transform(
+        angle_deg=0.0, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
+    )
+    np.testing.assert_allclose(transform, expected_matrix, atol=1e-7)
+
+
+@pytest.mark.parametrize(
+    "angle_deg, flip_horizontal, flip_vertical, expected_matrix",
+    [
+        # 90 deg, flip_horizontal=True, flip_vertical=True
+        (
+            90.0,
+            True,
+            True,
             np.array(
                 [
+                    [0.0, -1.0, 0.0, 0.0],
                     [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
                     [0.0, 0.0, 1.0, 0.0],
                     [0.0, 0.0, 0.0, 1.0],
                 ]
             ),
         ),
-    ],
-    ids=["flip_x_and_y", "flip_y_only", "flip_x_only", "no_flips"],
-)
-def test_make_transform_flips_only(flip_x, flip_y, expected_matrix):
-    """Test standard axis inversions without any Z-axis rotations."""
-    transform = make_transform(angle_deg=0.0, flip_x=flip_x, flip_y=flip_y)
-    np.testing.assert_allclose(transform, expected_matrix, atol=1e-7)
-
-
-@pytest.mark.parametrize(
-    "angle_deg, flip_x, flip_y, expected_matrix",
-    [
-        # 90 deg, flip_x=True, flip_y=True
+        # 90 deg, flip_vertical=True
         (
             90.0,
-            True,
+            False,
             True,
             np.array(
                 [
@@ -193,21 +184,7 @@ def test_make_transform_flips_only(flip_x, flip_y, expected_matrix):
                 ]
             ),
         ),
-        # 90 deg, flip_y=True
-        (
-            90.0,
-            False,
-            True,
-            np.array(
-                [
-                    [0.0, -1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            ),
-        ),
-        # 90 deg, flip_x=True
+        # 90 deg, flip_horizontal=True
         (
             90.0,
             True,
@@ -235,11 +212,25 @@ def test_make_transform_flips_only(flip_x, flip_y, expected_matrix):
                 ]
             ),
         ),
-        # 180 deg, flip_x=True, flip_y=True
+        # 180 deg, flip_horizontal=True, flip_vertical=True
         (
             180.0,
             True,
             True,
+            np.array(
+                [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
+        ),
+        # 180 deg, flip_horizontal=True
+        (
+            180.0,
+            True,
+            False,
             np.array(
                 [
                     [1.0, 0.0, 0.0, 0.0],
@@ -249,39 +240,6 @@ def test_make_transform_flips_only(flip_x, flip_y, expected_matrix):
                 ]
             ),
         ),
-        # 180 deg, flip_x=True
-        (
-            180.0,
-            True,
-            False,
-            np.array(
-                [
-                    [-1.0, 0.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [0.0, 0.0, -1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]
-            ),
-        ),
-    ],
-    ids=[
-        "90deg_flip_x_and_y",
-        "90deg_flip_y_only",
-        "90deg_flip_x_only",
-        "90deg_no_flips",
-        "180deg_flip_x_and_y",
-        "180deg_flip_x_only",
-    ],
-)
-def test_make_transform_with_angles(angle_deg, flip_x, flip_y, expected_matrix):
-    """Test axis inversions stacked with Z-axis angular rotations."""
-    result = make_transform(angle_deg=angle_deg, flip_x=flip_x, flip_y=flip_y)
-    np.testing.assert_allclose(result, expected_matrix, atol=1e-7)
-
-
-@pytest.mark.parametrize(
-    "angle_deg, flip_x, flip_y, expected_matrix",
-    [
         # 45 deg, no flips
         (
             45.0,
@@ -296,7 +254,35 @@ def test_make_transform_with_angles(angle_deg, flip_x, flip_y, expected_matrix):
                 ]
             ),
         ),
-        # 45 deg, flip_x=True, flip_y=True
+        # 45 deg, flip_horizontal=True
+        (
+            45.0,
+            True,
+            False,
+            np.array(
+                [
+                    [-0.70710678, 0.70710678, 0.0, 0.0],
+                    [0.70710678, 0.70710678, 0.0, 0.0],
+                    [0.0, 0.0, -1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
+        ),
+        # 45 deg, flip_vertical=True
+        (
+            45.0,
+            False,
+            True,
+            np.array(
+                [
+                    [0.70710678, -0.70710678, 0.0, 0.0],
+                    [-0.70710678, -0.70710678, 0.0, 0.0],
+                    [0.0, 0.0, -1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
+        ),
+        # 45 deg, flip_horizontal=True, flip_vertical=True
         (
             45.0,
             True,
@@ -304,22 +290,21 @@ def test_make_transform_with_angles(angle_deg, flip_x, flip_y, expected_matrix):
             np.array(
                 [
                     [-0.70710678, -0.70710678, 0.0, 0.0],
-                    [-0.70710678, 0.70710678, 0.0, 0.0],
-                    [0.0, 0.0, -1.0, 0.0],
+                    [0.70710678, -0.70710678, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
                     [0.0, 0.0, 0.0, 1.0],
                 ]
             ),
         ),
-        # Negative angle: -30 deg, flip_x=True
-        # Base cos(330) = ~0.866, sin(330) = -0.5
+        # Negative angle: -30 deg, flip_horizontal=True
         (
             -30.0,
             True,
             False,
             np.array(
                 [
-                    [0.86602540, -0.5, 0.0, 0.0],
-                    [-0.5, -0.86602540, 0.0, 0.0],
+                    [-0.86602540, -0.5, 0.0, 0.0],
+                    [-0.5, 0.86602540, 0.0, 0.0],
                     [0.0, 0.0, -1.0, 0.0],
                     [0.0, 0.0, 0.0, 1.0],
                 ]
@@ -341,46 +326,62 @@ def test_make_transform_with_angles(angle_deg, flip_x, flip_y, expected_matrix):
         ),
     ],
     ids=[
+        "90deg_flip_horizontal_and_y",
+        "90deg_flip_vertical_only",
+        "90deg_flip_horizontal_only",
+        "90deg_no_flips",
+        "180deg_flip_horizontal_and_y",
+        "180deg_flip_horizontal_only",
         "45deg_no_flips",
-        "45deg_flip_x_and_y",
-        "negative_30deg_flip_x",
-        "fractional_12_5deg",
+        "45deg_flip_horizontal_only",
+        "45deg_flip_vertical_only",
+        "45deg_flip_horizontal_and_y",
+        "neg30deg_flip_horizontal_only",
+        "12_5deg_no_flips",
     ],
 )
-def test_make_transform_weirder_angles(angle_deg, flip_x, flip_y, expected_matrix):
-    """Test modulo math, negative angles, and floating point precision."""
-    result = make_transform(angle_deg=angle_deg, flip_x=flip_x, flip_y=flip_y)
+def test_make_transform_with_angles(angle_deg, flip_horizontal, flip_vertical, expected_matrix):
+    """Test axis inversions stacked with Z-axis angular rotations."""
+    result = make_transform(
+        angle_deg=angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
+    )
     np.testing.assert_allclose(result, expected_matrix, atol=1e-7)
 
 
 @pytest.mark.parametrize(
-    ("q_file", "r_file", "angle_deg", "flip_x", "flip_y"),
+    ("q_file", "r_file", "angle_deg", "flip_horizontal", "flip_vertical"),
     [
         ("3-methylbutanone.mol", "3-methylbutanone_44cw.mol", 44, False, False),
         ("3-methylbutanone_44cw.mol", "3-methylbutanone.mol", -44, False, False),
-        ("3-methylbutanone.mol", "3-methylbutanone_hf.mol", 0, False, True),
-        ("3-methylbutanone_hf.mol", "3-methylbutanone.mol", 0, False, True),
-        ("3-methylbutanone.mol", "3-methylbutanone_vf.mol", 0, True, False),
-        ("3-methylbutanone_vf.mol", "3-methylbutanone.mol", 0, True, False),
+        ("3-methylbutanone.mol", "3-methylbutanone_bf.mol", 0, True, True),
+        ("3-methylbutanone_bf.mol", "3-methylbutanone.mol", 0, True, True),
+        ("3-methylbutanone.mol", "3-methylbutanone_hf.mol", 0, True, False),
+        ("3-methylbutanone_hf.mol", "3-methylbutanone.mol", 0, True, False),
+        ("3-methylbutanone.mol", "3-methylbutanone_vf.mol", 0, False, True),
+        ("3-methylbutanone_vf.mol", "3-methylbutanone.mol", 0, False, True),
         ("acetylic_acid.mol", "acetylic_acid_44cw.mol", 44, False, False),
         ("acetylic_acid_44cw.mol", "acetylic_acid.mol", -44, False, False),
-        ("acetylic_acid_hf.mol", "acetylic_acid.mol", 0, False, True),
-        ("acetylic_acid.mol", "acetylic_acid_hf.mol", 0, False, True),
-        ("acetylic_acid.mol", "acetylic_acid_vf.mol", 0, True, False),
-        ("acetylic_acid_vf.mol", "acetylic_acid.mol", 0, True, False),
+        ("acetylic_acid.mol", "acetylic_acid_bf.mol", 0, True, True),
+        ("acetylic_acid_bf.mol", "acetylic_acid.mol", 0, True, True),
+        ("acetylic_acid_hf.mol", "acetylic_acid.mol", 0, True, False),
+        ("acetylic_acid.mol", "acetylic_acid_hf.mol", 0, True, False),
+        ("acetylic_acid.mol", "acetylic_acid_vf.mol", 0, False, True),
+        ("acetylic_acid_vf.mol", "acetylic_acid.mol", 0, False, True),
     ],
 )
 def test_apply_transform(
-    q_file: str, r_file: str, angle_deg: float, flip_x: bool, flip_y: bool
+    q_file: str, r_file: str, angle_deg: float, flip_horizontal: bool, flip_vertical: bool
 ) -> None:
     q_orig = from_fixture_molblock(q_file)
     r = from_fixture_molblock(r_file)
     assert not is_same_conformer(q_orig, r)  # , visualize_conformers(q_orig, r)
 
-    q = apply_transform(q_orig, angle_deg, flip_x=flip_x, flip_y=flip_y)
-    assert is_same_conformer(q, r)  # , visualize_conformers(q, r)
+    q = apply_transform(
+        q_orig, angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
+    )
+    assert is_same_conformer(q, r), visualize_conformers(q, r)
 
-    q = apply_transform(q, -angle_deg, flip_x=flip_x, flip_y=flip_y)
+    q = apply_transform(q, -angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical)
     assert is_same_conformer(q, q_orig)  # , visualize_conformers(q, q_orig)
 
 
@@ -393,7 +394,7 @@ def test_apply_transform(
         ("3-methylbutanone_b12.mol", "3-methylbutanone.mol", 1, 2),
     ],
 )
-def test_flip_bond_single(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) -> None:
+def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) -> None:
 
     q_orig = from_fixture_molblock(q_file)
     r = from_fixture_molblock(r_file)
@@ -404,3 +405,19 @@ def test_flip_bond_single(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix
 
     q = flip_bond(q, bond_ix, anchor_atom_ix)
     assert is_same_conformer(q, q_orig)
+
+
+def test_flip_bond_errors() -> None:
+    benzenelike = Chem.MolFromSmiles("ClCc1ccccc1")
+    Compute2DCoords(benzenelike)
+    with pytest.raises(ValueError, match="Only single bonds can be flipped"):
+        flip_bond(benzenelike, 2, 3)
+    Kekulize(benzenelike)
+    with pytest.raises(ValueError, match="Cannot rotate aromatic bonds"):
+        flip_bond(benzenelike, 3, 3)
+    with pytest.raises(ValueError, match="anchor_atom_ix is not part of the specified bond"):
+        flip_bond(benzenelike, 0, 7)
+    with pytest.raises(ValueError, match="Anchor atom has no suitable neighboring atom"):
+        flip_bond(benzenelike, 0, 0)
+    with pytest.raises(ValueError, match="Rotating atom has no suitable neighboring atom"):
+        flip_bond(benzenelike, 0, 1)
