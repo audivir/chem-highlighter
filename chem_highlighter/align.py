@@ -6,7 +6,14 @@ import logging
 from typing import TYPE_CHECKING, TypeAlias
 
 from chem_highlighter.modify import parse_transform
-from chem_highlighter.utils import get_atom_position, get_neighbors
+from chem_highlighter.utils import (
+    flatten_conformer_z,
+    get_atom_position,
+    get_mol_center,
+    get_neighbors,
+    raise_if_3d_molecule,
+    recenter_mol,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -21,13 +28,12 @@ Flip: TypeAlias = tuple[int, int]
 Flips: TypeAlias = list[Flip]
 
 
-def get_2d_mol(mol_or_molblock: Chem.Mol | str) -> Chem.Mol:
+def get_2d_mol(mol_or_molblock: Chem.Mol | str, atol: float) -> Chem.Mol:
     """Return a RDKit molecule with a 2D conformer.
 
     Raises:
         ValueError: If any molecule is not convertable, has no coordinate or is a 3D molecule.
     """
-    import numpy as np
     from rdkit import Chem
 
     if isinstance(mol_or_molblock, Chem.Mol):
@@ -45,8 +51,7 @@ def get_2d_mol(mol_or_molblock: Chem.Mol | str) -> Chem.Mol:
     except ValueError as e:
         raise ValueError("No coordinates available for molecule") from e
 
-    if not np.isclose(conf.GetPositions()[:, 2], 0.0, atol=1e-4).all():
-        raise ValueError("Molecule is a 3D molecule")
+    raise_if_3d_molecule(conf, atol=atol)
     return mol
 
 
@@ -77,17 +82,17 @@ def find_mcs(query: Chem.Mol, reference: Chem.Mol) -> dict[int, int]:
 
 
 def flip_misaligned_bonds(
-    query: Chem.Mol, reference: Chem.Mol, mcs_match: Mapping[int, int]
+    query: Chem.Mol, reference: Chem.Mol, mcs_match: Mapping[int, int], atol: float
 ) -> list[tuple[int, int]]:
     """Flip misaligned rotatable bonds based on an MCS match.
 
     Returns:
         A list of the bond index and the anchor atom index where the flip happened.
     """
-    import numpy as np
     from rdkit import Chem
     from rdkit.Chem import rdMolTransforms
-    from rdkit.Geometry import Point3D
+
+    prev_center = get_mol_center(query)
 
     flips: list[tuple[int, int]] = []
     # find rotatable bonds
@@ -103,7 +108,7 @@ def flip_misaligned_bonds(
         idx_b, idx_c = bond_atoms
 
         # both atoms must be in MCS match
-        if idx_b not in mcs_match_rev or idx_c not in mcs_match_rev:
+        if idx_b not in mcs_match_rev or idx_c not in mcs_match_rev:  # pragma: no cover
             continue
 
         atom_b = reference.GetAtomWithIdx(idx_b)
@@ -158,18 +163,14 @@ def flip_misaligned_bonds(
                 )
                 flips.append((bond_ix, q_idx_b))
 
-    # safety: force all Z-coordinates back to 0.0
-    for ix in range(query.GetNumAtoms()):
-        pos = get_atom_position(conf_q, ix)
-        if not np.isclose(pos.z, 0.0, atol=1e-4):  # pragma: no cover
-            logger.warning("Flipping resulted in a non-zero z-coordinate, resetting...")
-        conf_q.SetAtomPosition(ix, Point3D(pos.x, pos.y, 0.0))
+    flatten_conformer_z(query, conf_q, atol=atol)
+    recenter_mol(query, prev_center, get_mol_center(query), atol=atol)
 
     return flips
 
 
 def get_alignment_flips_and_transform(
-    query: Chem.Mol, reference: Chem.Mol
+    query: Chem.Mol, reference: Chem.Mol, atol: float
 ) -> tuple[list[tuple[int, int]], NDArray[np.float64]]:
     """Finds the necessary flips and tranformation matrix to align two molecules.
 
@@ -194,13 +195,7 @@ def get_alignment_flips_and_transform(
         query, reference, atomMap=list(heavy_bare_mcs_match.items())
     )
 
-    # V2000 molblocks store coordinates to 4 decimal places, so a round trip
-    # through a molblock alone can introduce ~1e-4 RMSD noise. Tolerate that
-    # here rather than falling through to the AddHs/MCS-weighted alignment
-    # below, whose RDKit-generated hydrogen coordinates are themselves
-    # imprecise and would otherwise replace an already-good alignment with a
-    # worse one.
-    if np.isclose(bare_rmsd, 0.0, atol=1e-3):
+    if np.isclose(bare_rmsd, 0.0, atol=atol):
         return [], bare_transform
 
     query = Chem.AddHs(query, addCoords=True)
@@ -208,7 +203,7 @@ def get_alignment_flips_and_transform(
 
     mcs_match = find_mcs(query, reference)
 
-    flips = flip_misaligned_bonds(query, reference, mcs_match)
+    flips = flip_misaligned_bonds(query, reference, mcs_match, atol=atol)
 
     heavy_mcs_match = {
         q_ix: r_ix
@@ -224,7 +219,7 @@ def get_alignment_flips_and_transform(
 
 
 def get_alignment_ops_from_molblock(
-    query_molblock: str, reference_molblock: str
+    query_molblock: str, reference_molblock: str, atol: float
 ) -> tuple[list[tuple[int, int]], bool, float]:
     """Finds the necessary flips and rotation angle to align two molecules as Mol blocks.
 
@@ -234,8 +229,8 @@ def get_alignment_ops_from_molblock(
         whether a global horizontal flip is necessary
         and the rotation angle based on the reference molecule in degrees.
     """
-    query = get_2d_mol(query_molblock)
-    reference = get_2d_mol(reference_molblock)
-    flips, transform = get_alignment_flips_and_transform(query, reference)
-    global_flip, angle = parse_transform(transform)
+    query = get_2d_mol(query_molblock, atol=atol)
+    reference = get_2d_mol(reference_molblock, atol=atol)
+    flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
+    global_flip, angle = parse_transform(transform, atol=atol)
     return flips, global_flip, angle

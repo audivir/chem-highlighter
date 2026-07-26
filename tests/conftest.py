@@ -35,6 +35,12 @@ def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
     svg_a = RDKitDocument.from_mol(a).to_svg()
     svg_b = RDKitDocument.from_mol(b).to_svg()
 
+    conf_a = a.GetConformer()
+    conf_b = b.GetConformer()
+
+    center_a = (conf_a.GetPositions().min(axis=0) + conf_a.GetPositions().min(axis=0)) / 2.0
+    center_b = (conf_b.GetPositions().min(axis=0) + conf_b.GetPositions().min(axis=0)) / 2.0
+
     html = f"""
     <!doctype html>
     <html>
@@ -94,12 +100,12 @@ def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
 
             <div class="grid">
                 <article class="mol">
-                    <h2>Conformer A</h2>
+                    <h2>Conformer A ({center_a})</h2>
                     {svg_a}
                 </article>
 
                 <article class="mol">
-                    <h2>Conformer B</h2>
+                    <h2>Conformer B ({center_b})</h2>
                     {svg_b}
                 </article>
             </div>

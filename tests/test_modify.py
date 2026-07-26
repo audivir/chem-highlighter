@@ -443,10 +443,11 @@ def test_parse_transform(
     matrix: NDArray[np.float64], expected_horizontal_flip: bool, expected_angle_deg: float
 ) -> None:
     """Test extracting angle and flips from transformation matrices."""
-    horizontal_flip, angle_deg = parse_transform(matrix)
+    atol = 1e-5
+    horizontal_flip, angle_deg = parse_transform(matrix, atol=atol)
 
     assert horizontal_flip == expected_horizontal_flip
-    np.testing.assert_allclose(angle_deg, expected_angle_deg, atol=1e-4)
+    np.testing.assert_allclose(angle_deg, expected_angle_deg, atol=atol)
 
 
 @pytest.mark.parametrize(
@@ -468,22 +469,27 @@ def test_parse_transform(
         ("acetylic_acid.mol", "acetylic_acid_hf.mol", 0, True, False),
         ("acetylic_acid.mol", "acetylic_acid_vf.mol", 0, False, True),
         ("acetylic_acid_vf.mol", "acetylic_acid.mol", 0, False, True),
+        ("ethanol.mol", "ethanol_hf.mol", 0, True, False),
+        ("ethanol_hf.mol", "ethanol.mol", 0, True, False),
     ],
 )
 def test_apply_transform(
     q_file: str, r_file: str, angle_deg: float, flip_horizontal: bool, flip_vertical: bool
 ) -> None:
+    atol = 1e-5
     q_orig = from_fixture_molblock(q_file)
     r = from_fixture_molblock(r_file)
-    assert not is_same_conformer(q_orig, r)
+    assert not is_same_conformer(q_orig, r, atol=atol)
 
     q = apply_transform(
-        q_orig, angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
+        q_orig, angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical, atol=atol
     )
-    assert is_same_conformer(q, r)
+    assert is_same_conformer(q, r, atol=atol)
 
-    q = apply_transform(q, -angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical)
-    assert is_same_conformer(q, q_orig)
+    q = apply_transform(
+        q, -angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical, atol=atol
+    )
+    assert is_same_conformer(q, q_orig, atol=atol)
 
 
 @pytest.mark.parametrize(
@@ -496,32 +502,38 @@ def test_apply_transform(
     ],
 )
 def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) -> None:
-
+    atol = 1e-5
     q_orig = from_fixture_molblock(q_file)
     r = from_fixture_molblock(r_file)
-    assert not is_same_conformer(q_orig, r)
+    assert not is_same_conformer(q_orig, r, atol=atol)
 
-    q = flip_bond(q_orig, bond_ix, anchor_atom_ix)
-    assert is_same_conformer(q, r)
+    q = flip_bond(q_orig, bond_ix, anchor_atom_ix, atol=atol)
+    assert is_same_conformer(q, r, atol=atol)
 
-    q = flip_bond(q, bond_ix, anchor_atom_ix)
-    assert is_same_conformer(q, q_orig)
+    q = flip_bond(q, bond_ix, anchor_atom_ix, atol=atol)
+    assert is_same_conformer(q, q_orig, atol=atol)
 
 
 def test_flip_bond_errors() -> None:
+    atol = 1e-5
     benzenelike = Chem.MolFromSmiles("ClCc1ccccc1")
     Compute2DCoords(benzenelike)
     with pytest.raises(ValueError, match="Only single bonds can be flipped"):
-        flip_bond(benzenelike, 2, 3)
+        flip_bond(benzenelike, 2, 3, atol=atol)
     Kekulize(benzenelike)
     with pytest.raises(ValueError, match="Cannot rotate aromatic bonds"):
-        flip_bond(benzenelike, 3, 3)
+        flip_bond(benzenelike, 3, 3, atol=atol)
     with pytest.raises(ValueError, match="anchor_atom_ix is not part of the specified bond"):
-        flip_bond(benzenelike, 0, 7)
+        flip_bond(benzenelike, 0, 7, atol=atol)
     with pytest.raises(ValueError, match="Anchor atom has no suitable neighboring atom"):
-        flip_bond(benzenelike, 0, 0)
+        flip_bond(benzenelike, 0, 0, atol=atol)
     with pytest.raises(ValueError, match="Rotating atom has no suitable neighboring atom"):
-        flip_bond(benzenelike, 0, 1)
+        flip_bond(benzenelike, 0, 1, atol=atol)
+
+    cyclohexane = Chem.MolFromSmiles("C1CCCCC1")
+    Compute2DCoords(cyclohexane)
+    with pytest.raises(ValueError, match="Cannot flip a bond that is part of a ring"):
+        flip_bond(cyclohexane, 0, 1, atol=atol)
 
 
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 15)))
@@ -530,16 +542,17 @@ def test_flip_bond_errors() -> None:
     ["ethanol.mol", "3-methylbutanone.mol", "acetylic_acid.mol"],
 )
 def test_rotate_and_flip(angle_deg: float, q_file: str) -> None:
+    atol = 1e-5
     q_orig = from_fixture_molblock(q_file)
 
-    q = apply_transform(q_orig, angle_deg)
+    q = apply_transform(q_orig, angle_deg, atol=atol)
     keep_conf = np.isclose(angle_deg, 0.0)
-    assert is_same_conformer(q, q_orig) == keep_conf
+    assert is_same_conformer(q, q_orig, atol=atol) == keep_conf
 
-    q = apply_transform(q, -angle_deg)
-    assert is_same_conformer(q, q_orig)
+    q = apply_transform(q, -angle_deg, atol=atol)
+    assert is_same_conformer(q, q_orig, atol=atol)
 
     # flip
-    horizontal = apply_transform(q_orig, angle_deg, flip_horizontal=True)
-    vertical = apply_transform(q_orig, angle_deg + 180.0, flip_vertical=True)
-    assert is_same_conformer(horizontal, vertical)
+    horizontal = apply_transform(q_orig, angle_deg, flip_horizontal=True, atol=atol)
+    vertical = apply_transform(q_orig, angle_deg + 180.0, flip_vertical=True, atol=atol)
+    assert is_same_conformer(horizontal, vertical, atol=atol)

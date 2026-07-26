@@ -199,7 +199,7 @@ class RDKitDocument(HighlightBackendDocument):
         self._aligned = True
         query = self.mol
         reference_mol = Chem.MolFromMolBlock(reference)
-        _, transform = get_alignment_flips_and_transform(query, reference_mol)
+        _, transform = get_alignment_flips_and_transform(query, reference_mol, atol=1e-5)
         conf = query.GetConformer()
         TransformConformer(conf, transform)
 

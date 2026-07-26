@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from rdkit.Chem.rdMolTransforms import TransformConformer
 
 from chem_highlighter.state import AtomState
-from chem_highlighter.utils import get_atom_position
+from chem_highlighter.utils import (
+    flatten_conformer_z,
+    get_mol_center,
+    raise_if_3d_molecule,
+    recenter_mol,
+)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -52,12 +57,12 @@ def make_transform(
     return matrix
 
 
-def parse_transform(matrix: NDArray[np.float64], tol: float = 1e-5) -> tuple[bool, float]:
+def parse_transform(matrix: NDArray[np.float64], atol: float) -> tuple[bool, float]:
     """Extract the reflection state and 2D rotation angle from a 4x4 matrix.
 
     Arguments:
         matrix: 4x4 transformation matrix.
-        tol: Tolerance to match our constraints.
+        atol: Tolerance to match our constraints.
 
     Returns:
         A tuple whether a horizontal flip is necessary and the rotation angle in degrees.
@@ -74,8 +79,8 @@ def parse_transform(matrix: NDArray[np.float64], tol: float = 1e-5) -> tuple[boo
 
     # Check that there is no coupling between XY and Z.
     m_3d = matrix[:3, :3]
-    if not np.allclose(m_3d[:2, 2], 0, atol=tol) or not np.allclose(
-        m_3d[2, :2], 0, atol=tol
+    if not np.allclose(m_3d[:2, 2], 0, atol=atol) or not np.allclose(
+        m_3d[2, :2], 0, atol=atol
     ):  # pragma: no cover
         logger.warning("Matrix contains out-of-plane rotation components.")
 
@@ -90,7 +95,7 @@ def parse_transform(matrix: NDArray[np.float64], tol: float = 1e-5) -> tuple[boo
         # Undo the horizontal flip by multiplying by a matrix that negates the first column
         m_2d = m_2d @ np.diag([-1.0, 1.0])
 
-    if not np.isclose(np.linalg.det(m_2d), 1.0, atol=tol):  # pragma: no cover
+    if not np.isclose(np.linalg.det(m_2d), 1.0, atol=atol):  # pragma: no cover
         raise ValueError("Matrix 2D component does not represent a valid rigid transformation.")
 
     # Based on make_transform structure [[c, s], [-s, c]]
@@ -100,8 +105,14 @@ def parse_transform(matrix: NDArray[np.float64], tol: float = 1e-5) -> tuple[boo
     return horizontal_flip, float(np.degrees(angle_rad) % 360.0)
 
 
-def apply_transform(
-    mol: Chem.Mol, angle_deg: float, *, flip_horizontal: bool = False, flip_vertical: bool = False
+def apply_transform(  # noqa: PLR0913
+    mol: Chem.Mol,
+    angle_deg: float,
+    *,
+    flip_horizontal: bool = False,
+    flip_vertical: bool = False,
+    recenter: Literal["origin", "previous", "none"] = "previous",
+    atol: float,
 ) -> Chem.Mol:
     """Rotate and/or mirror a (flat, z=0) conformer within its own plane.
 
@@ -110,6 +121,13 @@ def apply_transform(
         angle_deg: Counterclockwise rotation angle in degrees.
         flip_horizontal: Mirror about the vertical axis.
         flip_vertical: Mirror about the horizontal axis.
+        recenter: if 'origin' re-center the result so its bounding box sits on the
+            origin, if 'previous' keep the molecule's bounding-box center where it was before,
+            else do not recenter the molecule.
+        atol: Tolerance for z coordinate warning.
+
+    Raises:
+        ValueError: If `mol`'s conformer is not flat (z != 0).
     """
     import numpy as np
     from rdkit import Chem
@@ -117,19 +135,17 @@ def apply_transform(
     mol = Chem.Mol(mol)
     conf = mol.GetConformer()
 
+    orig_center = get_mol_center(conf)
+    raise_if_3d_molecule(conf, atol=atol)
+
     matrix = make_transform(angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical)
     TransformConformer(conf, matrix)
 
-    positions = np.array(conf.GetPositions())
-    center = (positions.min(axis=0) + positions.max(axis=0)) / 2.0
+    if recenter != "none":
+        target_center = np.zeros(3) if recenter == "origin" else orig_center
+        recenter_mol(conf, target_center, None, atol)
 
-    if not np.isclose(mol.GetConformer().GetPositions()[:, 2], 0.0, atol=1e-4).all():
-        raise ValueError("3D Molecule")
-
-    for i, new_pos in enumerate(positions - center):
-        new_pos[2] = 0.0
-        conf.SetAtomPosition(i, new_pos)
-
+    flatten_conformer_z(mol, conf, atol=atol)
     return mol
 
 
@@ -137,21 +153,24 @@ def flip_bond(
     mol: Chem.Mol,
     bond_ix: int,
     anchor_atom_ix: int,
+    atol: float,
 ) -> Chem.Mol:
     """Flip a rotatable bond by 180°.
 
     Args:
-        mol: Molecule whose conformer will be modified in-place.
+        mol: Molecule to flip a bond of.
         bond_ix: Bond index to rotate.
         anchor_atom_ix: Atom on the bond that should remain fixed.
+        atol: Tolerance for shift warning.
 
     Returns:
-        Mol with flipped bond.
+        A new molecule with the flipped bond.
     """
-    import numpy as np
     from rdkit import Chem
     from rdkit.Chem import rdMolTransforms
-    from rdkit.Geometry import Point3D
+
+    mol = Chem.Mol(mol)
+    prev_center = get_mol_center(mol)
 
     bond = mol.GetBondWithIdx(bond_ix)
 
@@ -195,20 +214,23 @@ def flip_bond(
 
     angle = rdMolTransforms.GetDihedralDeg(conf, idx_a, idx_b, idx_c, idx_d)
 
-    rdMolTransforms.SetDihedralDeg(
-        conf,
-        idx_a,
-        idx_b,
-        idx_c,
-        idx_d,
-        angle + 180.0,
-    )
+    try:
+        rdMolTransforms.SetDihedralDeg(
+            conf,
+            idx_a,
+            idx_b,
+            idx_c,
+            idx_d,
+            angle + 180.0,
+        )
+    except ValueError as e:
+        if e.args[0] == "bond (j,k) must not belong to a ring":
+            raise ValueError("Cannot flip a bond that is part of a ring") from e
+        raise  # pragma: no cover
 
-    # safety: force all Z-coordinates back to 0.0
-    for ix in range(mol.GetNumAtoms()):
-        pos = get_atom_position(conf, ix)
-        if not np.isclose(pos.z, 0.0, atol=1e-4):  # pragma: no cover
-            logger.warning("Flipping resulted in a non-zero z-coordinate, resetting...")
-        conf.SetAtomPosition(ix, Point3D(pos.x, pos.y, 0.0))
+    flatten_conformer_z(mol, conf, atol=atol)
 
-    return AtomState.unfreeze(mol, tag)
+    mol = AtomState.unfreeze(mol, tag)
+    recenter_mol(mol, prev_center, get_mol_center(mol), atol=atol)
+
+    return mol

@@ -137,4 +137,4 @@ def test_align_to_reference(query_file: str) -> None:
     doc = RDKitDocument.from_molblock((FIXTURES / query_file).read_text())
     ref = RDKitDocument.from_molblock((FIXTURES / "ref.mol").read_text())
     doc.align_to_reference(ref.to_molblock())
-    assert is_same_conformer(doc.to_molblock(), ref.to_molblock())
+    assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=1e-5)

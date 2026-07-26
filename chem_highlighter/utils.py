@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, NamedTuple, TypeAlias
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    import numpy as np
+    from numpy.typing import NDArray
     from rdkit import Chem
     from rdkit.Geometry import Point3D
 
@@ -30,6 +32,63 @@ class SmilesMolPair(NamedTuple):
 def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
     """Get the 3D position of atom at `ix` of the conformer `conf`."""
     return conf.GetAtomPosition(ix)  # type: ignore[no-any-return]
+
+
+def get_mol_center(mol_or_conf: Chem.Mol | Chem.Conformer) -> NDArray[np.float64]:
+    """Get the center of the atom."""
+    from rdkit import Chem
+
+    conf = mol_or_conf.GetConformer() if isinstance(mol_or_conf, Chem.Mol) else mol_or_conf
+    positions = conf.GetPositions()
+    return (positions.min(axis=0) + positions.max(axis=0)) / 2.0  # type: ignore[no-any-return]
+
+
+def recenter_mol(
+    mol_or_conf: Chem.Mol | Chem.Conformer,
+    new_center: NDArray[np.float64],
+    check_for_shift: NDArray[np.float64] | None,
+    atol: float,
+) -> None:
+    """Recenter a molecule to new center coordinates."""
+    import numpy as np
+    from rdkit import Chem
+
+    if new_center.shape != (3,):
+        raise ValueError("New center has wrong shape")
+
+    if check_for_shift is not None:
+        if check_for_shift.shape != (3,):
+            raise ValueError("Previous center has wrong shape")
+        if not np.allclose(check_for_shift, new_center, atol=atol):
+            logger.warning("The molecule was shifted")
+
+    conf = mol_or_conf.GetConformer() if isinstance(mol_or_conf, Chem.Mol) else mol_or_conf
+    positions = conf.GetPositions()
+    new_bbox_center = get_mol_center(conf)
+    new_positions = positions - new_bbox_center + new_center
+    conf.SetPositions(new_positions)
+
+
+def flatten_conformer_z(mol: Chem.Mol, conf: Chem.Conformer, atol: float) -> None:
+    """Force every atom's Z-coordinate in `conf` back to exactly 0.0.
+
+    Logs a warning if an atom's Z deviates from 0 by more than `atol`.
+    """
+    from rdkit.Geometry import Point3D
+
+    for ix in range(mol.GetNumAtoms()):
+        pos = get_atom_position(conf, ix)
+        if abs(pos.z) > atol:  # pragma: no cover
+            logger.warning("Operation resulted in a non-zero z-coordinate, resetting...")
+        conf.SetAtomPosition(ix, Point3D(pos.x, pos.y, 0.0))
+
+
+def raise_if_3d_molecule(conf: Chem.Conformer, atol: float) -> None:
+    """Raise a ValueError if the conformer has any non-zero z coordinates."""
+    import numpy as np
+
+    if not np.isclose(conf.GetPositions()[:, 2], 0.0, atol=atol).all():
+        raise ValueError("Molecule is a 3D molecule")
 
 
 def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
@@ -132,7 +191,7 @@ def are_bonds_equal(bond_a: Chem.Bond, bond_b: Chem.Bond) -> bool:
 def is_same_conformer(  # noqa: C901,PLR0911
     mol_or_molblock_a: Chem.Mol | str,
     mol_or_molblock_b: Chem.Mol | str,
-    atol: float = 1e-3,
+    atol: float,
 ) -> bool:
     """Are two molblocks the same conformer."""
     import numpy as np

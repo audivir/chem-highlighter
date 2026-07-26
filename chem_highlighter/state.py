@@ -15,7 +15,10 @@ if TYPE_CHECKING:
 
 
 class AtomState(msgspec.Struct):
-    """Store the state of an atom."""
+    """Store the state of an atom.
+
+    The classes' `freeze`/`unfreeze`-methods are meant to be used together as a pair.
+    """
 
     num_explicit_hs: int
     no_implicit: bool
@@ -43,6 +46,10 @@ class AtomState(msgspec.Struct):
     def freeze(cls, mol: Chem.Mol) -> str:
         """Store each atom's state in a 'state_{tag}' property.
 
+        Mutates `mol` in place: every atom is given a new property named
+        after the returned tag. The matching `unfreeze` call must always be
+        made to remove it again.
+
         Returns:
             The property's tag.
         """
@@ -55,6 +62,12 @@ class AtomState(msgspec.Struct):
     @classmethod
     def unfreeze(cls: type[Self], mol: Chem.Mol, tag: str) -> Chem.Mol:  # type: ignore[redundant-self]
         """Reset to the previous states and remove untagged molecules.
+
+        Removes the `tag` property (added by `freeze`) from every atom that
+        carries it and restores its stored state; atoms without the tag are
+        assumed to have been added after `freeze` and are removed. This
+        clears the property only from `mol`'s own atoms. Use this function's
+        output instead of the original `mol` passed to `freeze`.
 
         Returns:
             The reset molecule.
