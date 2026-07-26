@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 from conftest import assert_mols_equal
 from rdkit import Chem
+from rdkit.Chem.Draw import rdDepictor
 
 from chem_highlighter.utils import (
     add_hydrogens,
+    get_atom_position,
     get_atoms,
     get_bonds,
     get_neighbors,
@@ -74,6 +76,14 @@ def test_get_smiles_mol_pair(data: str | Chem.Mol, expected: str) -> None:
     pair = get_smiles_mol_pair(data)
     assert pair.smiles == expected
     assert_mols_equal(pair.mol, "CCC")
+
+
+def test_get_atom_position() -> None:
+    mol = mol_from_smiles("CCC")
+    rdDepictor.Compute2DCoords(mol)
+    conf = mol.GetConformer()
+    pos = get_atom_position(conf, 0)
+    assert pos.z == 0
 
 
 def test_get_atoms() -> None:

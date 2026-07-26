@@ -34,6 +34,11 @@ class SmilesMolPair(NamedTuple):
     mol: Chem.Mol
 
 
+def get_atom_position(conf: Chem.Conformer, ix: int) -> Position3D:
+    """Get the 3D position of atom at `ix` of the conformer `conf`."""
+    return Position3D(*conf.GetAtomPosition(ix))
+
+
 def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
     """Return a tuple of the atoms of a RDKit molecule."""
     return mol.GetAtoms()  # type: ignore[no-any-return,no-untyped-call]
