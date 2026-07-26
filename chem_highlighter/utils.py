@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from rdkit import Chem
+    from rdkit.Geometry import Point3D
 
 logger = logging.getLogger()
 
@@ -19,14 +20,6 @@ GREEN_COLOR = "\033[92m"
 RESET_COLOR = "\033[0m"
 
 
-class Position3D(NamedTuple):
-    """A 3D position."""
-
-    x: float
-    y: float
-    z: float
-
-
 class SmilesMolPair(NamedTuple):
     """Tuple to hold SMILES string and RDKit molecule."""
 
@@ -34,9 +27,9 @@ class SmilesMolPair(NamedTuple):
     mol: Chem.Mol
 
 
-def get_atom_position(conf: Chem.Conformer, ix: int) -> Position3D:
+def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
     """Get the 3D position of atom at `ix` of the conformer `conf`."""
-    return Position3D(*conf.GetAtomPosition(ix))
+    return conf.GetAtomPosition(ix)  # type: ignore[no-any-return]
 
 
 def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:

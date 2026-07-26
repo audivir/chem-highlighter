@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from rdkit.Chem.rdMolTransforms import TransformConformer
 
 from chem_highlighter.state import AtomState
-from chem_highlighter.utils import Position3D
+from chem_highlighter.utils import get_atom_position
 
 if TYPE_CHECKING:
     import numpy as np
@@ -90,7 +90,7 @@ def parse_transform(matrix: NDArray[np.float64], tol: float = 1e-5) -> tuple[boo
         # Undo the horizontal flip by multiplying by a matrix that negates the first column
         m_2d = m_2d @ np.diag([-1.0, 1.0])
 
-    if not np.isclose(np.linalg.det(m_2d), 1.0, atol=tol):
+    if not np.isclose(np.linalg.det(m_2d), 1.0, atol=tol):  # pragma: no cover
         raise ValueError("Matrix 2D component does not represent a valid rigid transformation.")
 
     # Based on make_transform structure [[c, s], [-s, c]]
@@ -116,13 +116,18 @@ def apply_transform(
 
     mol = Chem.Mol(mol)
     conf = mol.GetConformer()
+
     matrix = make_transform(angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical)
     TransformConformer(conf, matrix)
 
     positions = np.array(conf.GetPositions())
     center = (positions.min(axis=0) + positions.max(axis=0)) / 2.0
-    new_positions = [Position3D(*p) for p in positions - center]
-    for i, new_pos in enumerate(new_positions):
+
+    if not np.isclose(mol.GetConformer().GetPositions()[:, 2], 0.0, atol=1e-4).all():
+        raise ValueError("3D Molecule")
+
+    for i, new_pos in enumerate(positions - center):
+        new_pos[2] = 0.0
         conf.SetAtomPosition(i, new_pos)
 
     return mol
@@ -143,8 +148,10 @@ def flip_bond(
     Returns:
         Mol with flipped bond.
     """
+    import numpy as np
     from rdkit import Chem
     from rdkit.Chem import rdMolTransforms
+    from rdkit.Geometry import Point3D
 
     bond = mol.GetBondWithIdx(bond_ix)
 
@@ -196,5 +203,12 @@ def flip_bond(
         idx_d,
         angle + 180.0,
     )
+
+    # safety: force all Z-coordinates back to 0.0
+    for ix in range(mol.GetNumAtoms()):
+        pos = get_atom_position(conf, ix)
+        if not np.isclose(pos.z, 0.0, atol=1e-4):  # pragma: no cover
+            logger.warning("Flipping resulted in a non-zero z-coordinate, resetting...")
+        conf.SetAtomPosition(ix, Point3D(pos.x, pos.y, 0.0))
 
     return AtomState.unfreeze(mol, tag)

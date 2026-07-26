@@ -522,3 +522,24 @@ def test_flip_bond_errors() -> None:
         flip_bond(benzenelike, 0, 0)
     with pytest.raises(ValueError, match="Rotating atom has no suitable neighboring atom"):
         flip_bond(benzenelike, 0, 1)
+
+
+@pytest.mark.parametrize("angle_deg", list(range(0, 360, 15)))
+@pytest.mark.parametrize(
+    "q_file",
+    ["ethanol.mol", "3-methylbutanone.mol", "acetylic_acid.mol"],
+)
+def test_rotate_and_flip(angle_deg: float, q_file: str) -> None:
+    q_orig = from_fixture_molblock(q_file)
+
+    q = apply_transform(q_orig, angle_deg)
+    keep_conf = np.isclose(angle_deg, 0.0)
+    assert is_same_conformer(q, q_orig) == keep_conf
+
+    q = apply_transform(q, -angle_deg)
+    assert is_same_conformer(q, q_orig)
+
+    # flip
+    horizontal = apply_transform(q_orig, angle_deg, flip_horizontal=True)
+    vertical = apply_transform(q_orig, angle_deg + 180.0, flip_vertical=True)
+    assert is_same_conformer(horizontal, vertical)
