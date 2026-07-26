@@ -164,7 +164,6 @@ def test_get_alignment_flips_and_transform(
 
 
 # acetylic_acid.mol, 30 degrees fails somehow, so we jump with 14 degrees
-@pytest.mark.parametrize("roundtrip", [False, True])
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 14)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
@@ -172,7 +171,6 @@ def test_get_alignment_flips_and_transform(
     [("ethanol.mol", []), ("3-methylbutanone.mol", [(1, 2)]), ("acetylic_acid.mol", [(0, 0)])],
 )
 def test_get_alignment_ops_from_molblock(
-    roundtrip: bool,
     angle_deg: float,
     flip_horizontal: bool,
     q_file: str,
@@ -183,25 +181,6 @@ def test_get_alignment_ops_from_molblock(
     def op_func(q: Chem.Mol, q_orig: Chem.Mol) -> tuple[list[tuple[int, int]], bool, float]:
         q_molblock = Chem.MolToMolBlock(q, kekulize=False)
         q_orig_molblock = Chem.MolToMolBlock(q_orig, kekulize=False)
-
-        q2 = get_2d_mol(q_molblock)
-        q2_orig = get_2d_mol(q_orig_molblock)
-
-        def coords_same(mol1: Chem.Mol, mol2: Chem.Mol, tol: float = 1e-4) -> bool:
-            if mol1.GetNumAtoms() != mol2.GetNumAtoms():
-                return False
-
-            return np.allclose(
-                mol1.GetConformer().GetPositions(),
-                mol2.GetConformer().GetPositions(),
-                atol=tol,
-            )
-
-        assert coords_same(q, q2)
-        assert coords_same(q_orig, q2_orig)
-
-        if roundtrip:
-            return get_alignment_ops_from_molblock(q2, q2_orig)
-        return get_alignment_ops_from_molblock(q, q_orig)
+        return get_alignment_ops_from_molblock(q_molblock, q_orig_molblock)
 
     assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func)

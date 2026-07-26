@@ -17,9 +17,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-ALIGN_WEIGHT_DEFAULT = 1
-ALIGN_WEIGHT_MAP = {1: 0.1, 6: 1}
-
 Flip: TypeAlias = tuple[int, int]
 Flips: TypeAlias = list[Flip]
 
@@ -187,13 +184,14 @@ def get_alignment_flips_and_transform(
 
     bare_mcs_match = find_mcs(query, reference)
 
-    bare_weights: list[float] = []
-    for atom_ix in bare_mcs_match.values():
-        atom = reference.GetAtomWithIdx(atom_ix)
-        bare_weights.append(ALIGN_WEIGHT_MAP.get(atom.GetAtomicNum(), ALIGN_WEIGHT_DEFAULT))
+    heavy_bare_mcs_match = {
+        q_ix: r_ix
+        for q_ix, r_ix in bare_mcs_match.items()
+        if reference.GetAtomWithIdx(r_ix).GetAtomicNum() != 1
+    }
 
     bare_rmsd, bare_transform = rdMolAlign.GetAlignmentTransform(
-        query, reference, atomMap=list(bare_mcs_match.items()), weights=bare_weights
+        query, reference, atomMap=list(heavy_bare_mcs_match.items())
     )
 
     # V2000 molblocks store coordinates to 4 decimal places, so a round trip
@@ -212,22 +210,14 @@ def get_alignment_flips_and_transform(
 
     flips = flip_misaligned_bonds(query, reference, mcs_match)
 
-    # AddHs places hydrogens on rotatable/symmetric groups (e.g. a terminal
-    # methyl) independently for query and reference, so their positions have
-    # no meaningful atom-to-atom correspondence. Feeding them into the final
-    # rigid-body fit only adds noise (amplified by any precision loss from a
-    # molblock round trip) that can visibly skew the fitted rotation angle.
-    # Hydrogens are still used above to detect/correct genuine bond flips,
-    # but the alignment fit itself uses heavy atoms only.
     heavy_mcs_match = {
         q_ix: r_ix
         for q_ix, r_ix in mcs_match.items()
-        if reference.GetAtomWithIdx(r_ix).GetAtomicNum() != 1  # noqa: PLR2004
+        if reference.GetAtomWithIdx(r_ix).GetAtomicNum() != 1
     }
-    weights = [ALIGN_WEIGHT_DEFAULT] * len(heavy_mcs_match)
 
     _, transform = rdMolAlign.GetAlignmentTransform(
-        query, reference, atomMap=list(heavy_mcs_match.items()), weights=weights
+        query, reference, atomMap=list(heavy_mcs_match.items())
     )
 
     return flips, transform

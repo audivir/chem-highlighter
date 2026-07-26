@@ -66,7 +66,7 @@ testpaths = ["tests"]
 
 [tool.vulture]
 ignore_names = ["_*", "unused_*"]
-paths = [".whitelist", "tests", "aisac_spr"]
+paths = [".whitelist", "tests", "chem_highlighter"]
 make_whitelist = true
 sort_by_size = true
 verbose = false
