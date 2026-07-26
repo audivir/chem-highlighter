@@ -77,14 +77,19 @@ def test_find_mcs(smiles_q: str, smiles_r: str, n_mcs: int) -> None:
 
 @pytest.mark.parametrize(
     ("q_file", "allowed_flips"),
-    [("ethanol.mol", []), ("3-methylbutanone.mol", [(1, 2)]), ("acetylic_acid.mol", [(0, 0)])],
+    [
+        ("ethanol.mol", []),
+        ("3-methylbutanone.mol", [(1, 2)]),
+        ("acetylic_acid.mol", [(0, 0)]),
+        ("mol.mol", [(6, 6), (7, 6), (8, 6), (9, 8)]),
+    ],
 )
 def test_flip_misaligned_bonds(q_file: str, allowed_flips: Sequence[tuple[int, int]]) -> None:
     atol = 1e-5
     q_orig = from_fixture_molblock(q_file)
     q_orig = Chem.AddHs(q_orig, addCoords=True)
 
-    for r in range(max((len(f) for f in allowed_flips), default=1)):
+    for r in range(len(allowed_flips) + 1):
         for flips in itertools.combinations(allowed_flips, r=r):
             q = q_orig
             for bond_ix, anchor_atom_ix in flips:
@@ -102,7 +107,7 @@ def test_flip_misaligned_bonds(q_file: str, allowed_flips: Sequence[tuple[int, i
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
     "q_file",
-    ["ethanol.mol", "3-methylbutanone.mol", "acetylic_acid.mol"],
+    ["ethanol.mol", "3-methylbutanone.mol", "acetylic_acid.mol", "mol.mol"],
 )
 def test_get_alignment_flips_and_transform_without_alignment_flips(
     angle_deg: float, flip_horizontal: bool, q_file: str
@@ -153,7 +158,12 @@ def assert_all_alignments(
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
     ("q_file", "allowed_flips"),
-    [("ethanol.mol", []), ("3-methylbutanone.mol", [(1, 2)]), ("acetylic_acid.mol", [(0, 0)])],
+    [
+        ("ethanol.mol", []),
+        ("3-methylbutanone.mol", [(1, 2)]),
+        ("acetylic_acid.mol", [(0, 0)]),
+        ("mol.mol", [(6, 6), (7, 6), (8, 6), (9, 8)]),
+    ],
 )
 def test_get_alignment_flips_and_transform(
     angle_deg: float, flip_horizontal: bool, q_file: str, allowed_flips: Sequence[tuple[int, int]]
@@ -175,7 +185,12 @@ def test_get_alignment_flips_and_transform(
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
     ("q_file", "allowed_flips"),
-    [("ethanol.mol", []), ("3-methylbutanone.mol", [(1, 2)]), ("acetylic_acid.mol", [(0, 0)])],
+    [
+        ("ethanol.mol", []),
+        ("3-methylbutanone.mol", [(1, 2)]),
+        ("acetylic_acid.mol", [(0, 0)]),
+        ("mol.mol", [(6, 6), (7, 6), (8, 6), (9, 8)]),
+    ],
 )
 def test_get_alignment_ops_from_molblock(
     angle_deg: float,

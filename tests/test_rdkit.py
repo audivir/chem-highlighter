@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import logging
+from typing import TYPE_CHECKING
+
 import msgspec
 import pytest
-from conftest import FIXTURES
+from conftest import from_fixture_molblock
 from rdkit import Chem
 
 from chem_highlighter.backend.rdkit import RDKitDocument
 from chem_highlighter.hml import HML
 from chem_highlighter.utils import is_same_conformer, mol_from_smiles
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def _doc(smiles: str) -> RDKitDocument:
@@ -112,8 +118,6 @@ def test_cleanup() -> None:
 
 
 def test_cleanup_after_kekulize_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
-    import logging
-
     doc = _doc("c1ccccc1")
     doc.kekulize(True)
     with caplog.at_level(logging.WARNING, logger="chem_highlighter.backend.rdkit"):
@@ -122,7 +126,6 @@ def test_cleanup_after_kekulize_logs_warning(caplog: pytest.LogCaptureFixture) -
 
 
 def test_cleanup_after_align_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
-    import logging
 
     doc = _doc("CCO")
     ref = _doc("CCO")
@@ -132,9 +135,34 @@ def test_cleanup_after_align_logs_warning(caplog: pytest.LogCaptureFixture) -> N
     assert "Alignment" in caplog.text
 
 
-@pytest.mark.parametrize("query_file", ["query1.mol", "query2.mol"])
-def test_align_to_reference(query_file: str) -> None:
-    doc = RDKitDocument.from_molblock((FIXTURES / query_file).read_text())
-    ref = RDKitDocument.from_molblock((FIXTURES / "ref.mol").read_text())
-    doc.align_to_reference(ref.to_molblock())
-    assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=1e-5)
+@pytest.mark.parametrize(
+    ("r_file", "q_file_suffixes"),
+    [
+        ("3-methylbutanone.mol", ["_44cw", "_b12", "_bf", "_hf", "_vf"]),
+        ("acetylic_acid.mol", ["_44cw", "_b00", "_bf", "_hf", "_vf"]),
+        (
+            "mol.mol",
+            [
+                "_44cw",
+                "_b66",
+                "_b76",
+                "_b86",
+                "_b98",
+                "_bf",
+                "_hf",
+                "_vf",
+                "_multi_b66_b98_hf_22cw",
+            ],
+        ),
+        ("ethanol.mol", ["_hf"]),
+    ],
+)
+def test_align_to_reference(r_file: str, q_file_suffixes: Sequence[str]) -> None:
+    r = from_fixture_molblock(r_file)
+    for q_file_suffix in q_file_suffixes:
+        q = from_fixture_molblock(r_file.removesuffix(".mol") + f"{q_file_suffix}.mol")
+        for doc_mol, ref_mol in ((q, r), (r, q)):
+            doc = RDKitDocument.from_mol(doc_mol)
+            ref = RDKitDocument.from_mol(ref_mol)
+            doc.align_to_reference(ref.to_molblock())
+            assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=1e-5)

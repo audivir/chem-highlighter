@@ -11,6 +11,7 @@ from typing_extensions import Self, override
 from chem_highlighter.align import get_alignment_flips_and_transform
 from chem_highlighter.backend.map_tokens import map_smiles_tokens
 from chem_highlighter.hml import HML, HighlightBackendDocument
+from chem_highlighter.modify import apply_transform, flip_bond, parse_transform
 from chem_highlighter.utils import RESET_COLOR, get_ansi_color
 
 if TYPE_CHECKING:
@@ -194,14 +195,17 @@ class RDKitDocument(HighlightBackendDocument):
             reference: The reference molecule as Mol block.
         """
         from rdkit import Chem
-        from rdkit.Chem.rdMolTransforms import TransformConformer
 
+        atol = 1e-5
         self._aligned = True
         query = self.mol
         reference_mol = Chem.MolFromMolBlock(reference)
-        _, transform = get_alignment_flips_and_transform(query, reference_mol, atol=1e-5)
-        conf = query.GetConformer()
-        TransformConformer(conf, transform)
+        flips, transform = get_alignment_flips_and_transform(query, reference_mol, atol=atol)
+        global_flip, found_angle = parse_transform(transform, atol=atol)
+        for bond_ix, anchor_atom_ix in flips:
+            query = flip_bond(query, bond_ix, anchor_atom_ix, atol=atol)
+        query = apply_transform(query, found_angle, flip_horizontal=global_flip, atol=atol)
+        self.mol = query
 
     @override
     def cleanup(self) -> None:
@@ -283,7 +287,7 @@ class RDKitDocument(HighlightBackendDocument):
                 current_color = group_ix
                 chars_out.append(new_color)
             chars_out.append(cm.token)
-        if current_color is not None:
+        if current_color is not None:  # pragma: no cover
             chars_out.append(RESET_COLOR)
 
         return "".join(chars_out)

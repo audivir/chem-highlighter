@@ -472,6 +472,14 @@ def test_parse_transform(
         ("acetylic_acid_vf.mol", "acetylic_acid.mol", 0, False, True),
         ("ethanol.mol", "ethanol_hf.mol", 0, True, False),
         ("ethanol_hf.mol", "ethanol.mol", 0, True, False),
+        ("mol.mol", "mol_44cw.mol", 44, False, False),
+        ("mol_44cw.mol", "mol.mol", -44, False, False),
+        ("mol.mol", "mol_bf.mol", 0, True, True),
+        ("mol_bf.mol", "mol.mol", 0, True, True),
+        ("mol_hf.mol", "mol.mol", 0, True, False),
+        ("mol.mol", "mol_hf.mol", 0, True, False),
+        ("mol.mol", "mol_vf.mol", 0, False, True),
+        ("mol_vf.mol", "mol.mol", 0, False, True),
     ],
 )
 def test_apply_transform(
@@ -524,6 +532,10 @@ def test_apply_transform_recenter_modes(
         ("acetylic_acid_b00.mol", "acetylic_acid.mol", 0, 0),
         ("3-methylbutanone.mol", "3-methylbutanone_b12.mol", 1, 2),
         ("3-methylbutanone_b12.mol", "3-methylbutanone.mol", 1, 2),
+        ("mol.mol", "mol_b98.mol", 9, 8),
+        ("mol.mol", "mol_b76.mol", 7, 6),
+        ("mol.mol", "mol_b66.mol", 6, 6),
+        ("mol.mol", "mol_b86.mol", 8, 6),
     ],
 )
 def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) -> None:
@@ -533,7 +545,9 @@ def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) 
     assert not is_same_conformer(q_orig, r, atol=atol)
 
     q = flip_bond(q_orig, bond_ix, anchor_atom_ix, atol=atol)
-    assert is_same_conformer(q, r, atol=atol)
+    from conftest import visualize_conformers
+
+    assert is_same_conformer(q, r, atol=atol), visualize_conformers(q, q_orig)
 
     q = flip_bond(q, bond_ix, anchor_atom_ix, atol=atol)
     assert is_same_conformer(q, q_orig, atol=atol)

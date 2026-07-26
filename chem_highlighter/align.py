@@ -146,8 +146,20 @@ def flip_misaligned_bonds(
             diff = 360.0 - diff
 
         if diff > 90.0:  # noqa: PLR2004
-            dist_a = get_atom_position(conf_q, q_idx_a).Distance(get_atom_position(conf_r, q_idx_a))
-            dist_d = get_atom_position(conf_q, q_idx_d).Distance(get_atom_position(conf_r, q_idx_d))
+            # Measure how far each side moved *relative to its own bond atom*
+            # (a relative to b, d relative to c), not in absolute coordinates.
+            # query may have been globally translated relative to reference
+            # (e.g. by a prior flip_bond's bounding-box recentering), which
+            # would otherwise bias an absolute-position comparison toward
+            # picking the wrong side.
+            vec_a_q = get_atom_position(conf_q, q_idx_a) - get_atom_position(conf_q, q_idx_b)
+            vec_a_r = get_atom_position(conf_r, q_idx_a) - get_atom_position(conf_r, q_idx_b)
+            dist_a = vec_a_q.Distance(vec_a_r)
+
+            vec_d_q = get_atom_position(conf_q, q_idx_d) - get_atom_position(conf_q, q_idx_c)
+            vec_d_r = get_atom_position(conf_r, q_idx_d) - get_atom_position(conf_r, q_idx_c)
+            dist_d = vec_d_q.Distance(vec_d_r)
+
             bond_ix = query.GetBondBetweenAtoms(q_idx_b, q_idx_c).GetIdx()
 
             if dist_a > dist_d:
