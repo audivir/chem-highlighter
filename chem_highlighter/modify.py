@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from rdkit.Chem.rdMolTransforms import TransformConformer
@@ -13,6 +14,8 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
     from rdkit import Chem
+
+logger = logging.getLogger(__name__)
 
 
 def make_transform(
@@ -34,32 +37,11 @@ def make_transform(
     c = np.cos(theta)
     s = np.sin(theta)
 
-    matrix = np.array(
-        [
-            [c, s, 0.0, 0.0],
-            [-s, c, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
-    )
+    matrix = np.diag([0.0, 0.0, 1.0, 1.0])
+    matrix[:2, :2] = [[c, s], [-s, c]]
 
-    rotate_around_x = np.array(
-        [
-            [1, 0, 0, 0],
-            [0, -1, 0, 0],
-            [0, 0, -1, 0],
-            [0, 0, 0, 1],
-        ]
-    )
-
-    rotate_around_y = np.array(
-        [
-            [-1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, -1, 0],
-            [0, 0, 0, 1],
-        ]
-    )
+    rotate_around_x = np.diag([1.0, -1.0, -1.0, 1.0])
+    rotate_around_y = np.diag([-1.0, 1.0, -1.0, 1.0])
 
     if flip_horizontal:
         matrix = matrix @ rotate_around_y
@@ -68,6 +50,54 @@ def make_transform(
         matrix = matrix @ rotate_around_x
 
     return matrix
+
+
+def parse_transform(matrix: NDArray[np.float64], tol: float = 1e-5) -> tuple[bool, float]:
+    """Extract the reflection state and 2D rotation angle from a 4x4 matrix.
+
+    Arguments:
+        matrix: 4x4 transformation matrix.
+        tol: Tolerance to match our constraints.
+
+    Returns:
+        A tuple whether a horizontal flip is necessary and the rotation angle in degrees.
+
+    Raises:
+        ValueError if the matrix is not 4x4 or does not represent a valid rigid transformation.
+    """
+    import numpy as np
+
+    if matrix.shape != (4, 4):  # pragma: no cover
+        raise ValueError("Matrix must be exactly 4x4.")
+
+    m_2d = matrix[:2, :2]
+
+    # Check that there is no coupling between XY and Z.
+    m_3d = matrix[:3, :3]
+    if not np.allclose(m_3d[:2, 2], 0, atol=tol) or not np.allclose(
+        m_3d[2, :2], 0, atol=tol
+    ):  # pragma: no cover
+        logger.warning("Matrix contains out-of-plane rotation components.")
+
+    det = np.linalg.det(m_2d)
+
+    horizontal_flip = False
+
+    # Remove a reflection, if present, before extracting the angle.
+    # We standardize all 2D reflections to a horizontal flip (negating the X column).
+    if det < 0:
+        horizontal_flip = True
+        # Undo the horizontal flip by multiplying by a matrix that negates the first column
+        m_2d = m_2d @ np.diag([-1.0, 1.0])
+
+    if not np.isclose(np.linalg.det(m_2d), 1.0, atol=tol):
+        raise ValueError("Matrix 2D component does not represent a valid rigid transformation.")
+
+    # Based on make_transform structure [[c, s], [-s, c]]
+    # c = m_2d[0, 0] and s = m_2d[0, 1]
+    angle_rad = np.arctan2(m_2d[0, 1], m_2d[0, 0])
+
+    return horizontal_flip, float(np.degrees(angle_rad) % 360.0)
 
 
 def apply_transform(
