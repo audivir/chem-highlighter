@@ -33,7 +33,7 @@ def get_diff(s1: str, s2: str) -> tuple[list[tuple[Diff_T, str]], list[tuple[Dif
 
 
 def get_smiles_diff(
-    query: str, new_smiles: str, n_augmentations: int = 100, random_seed: int = 0
+    query: str, new_smiles: str, n_augmentations: int = 100, random_seed: int = 42
 ) -> tuple[list[tuple[Diff_T, str]], list[tuple[Diff_T, str]]]:
     """Create smallest diff information of two SMILES strings."""
     from rdkit import Chem
@@ -52,7 +52,7 @@ def get_smiles_diff(
 
 
 def colorize_smiles_diff(
-    query: str, new_smiles: str, n_augmentations: int = 100, random_seed:int =0
+    query: str, new_smiles: str, n_augmentations: int = 100, random_seed: int = 42
 ) -> tuple[str, str]:
     """Create colorized diff of two SMILES strings."""
 
@@ -67,5 +67,7 @@ def colorize_smiles_diff(
             out_parts.append(text)
         return "".join(out_parts)
 
-    query_parts, new_smiles_parts = get_smiles_diff(query, new_smiles, n_augmentations, random_seed=random_seed)
+    query_parts, new_smiles_parts = get_smiles_diff(
+        query, new_smiles, n_augmentations, random_seed=random_seed
+    )
     return _colorize(query_parts), _colorize(new_smiles_parts)

@@ -29,90 +29,6 @@ class SmilesMolPair(NamedTuple):
     mol: Chem.Mol
 
 
-def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
-    """Get the 3D position of atom at `ix` of the conformer `conf`."""
-    return conf.GetAtomPosition(ix)  # type: ignore[no-any-return]
-
-
-def get_mol_center(mol_or_conf: Chem.Mol | Chem.Conformer) -> NDArray[np.float64]:
-    """Get the center of the atom."""
-    from rdkit import Chem
-
-    conf = mol_or_conf.GetConformer() if isinstance(mol_or_conf, Chem.Mol) else mol_or_conf
-    positions = conf.GetPositions()
-    return (positions.min(axis=0) + positions.max(axis=0)) / 2.0  # type: ignore[no-any-return]
-
-
-def recenter_mol(
-    mol_or_conf: Chem.Mol | Chem.Conformer,
-    new_center: NDArray[np.float64],
-    check_for_shift: NDArray[np.float64] | None,
-    atol: float,
-) -> None:
-    """Recenter a molecule to new center coordinates."""
-    import numpy as np
-    from rdkit import Chem
-
-    if new_center.shape != (3,):
-        raise ValueError("New center has wrong shape")
-
-    if check_for_shift is not None:
-        if check_for_shift.shape != (3,):
-            raise ValueError("Previous center has wrong shape")
-        if not np.allclose(check_for_shift, new_center, atol=atol):
-            logger.warning("The molecule was shifted")
-
-    conf = mol_or_conf.GetConformer() if isinstance(mol_or_conf, Chem.Mol) else mol_or_conf
-    positions = conf.GetPositions()
-    new_bbox_center = get_mol_center(conf)
-    new_positions = positions - new_bbox_center + new_center
-    conf.SetPositions(new_positions)
-
-
-def flatten_conformer_z(mol: Chem.Mol, conf: Chem.Conformer, atol: float) -> None:
-    """Force every atom's Z-coordinate in `conf` back to exactly 0.0.
-
-    Logs a warning if an atom's Z deviates from 0 by more than `atol`.
-    """
-    from rdkit.Geometry import Point3D
-
-    for ix in range(mol.GetNumAtoms()):
-        pos = get_atom_position(conf, ix)
-        if abs(pos.z) > atol:  # pragma: no cover
-            logger.warning("Operation resulted in a non-zero z-coordinate, resetting...")
-        conf.SetAtomPosition(ix, Point3D(pos.x, pos.y, 0.0))
-
-
-def raise_if_3d_molecule(conf: Chem.Conformer, atol: float) -> None:
-    """Raise a ValueError if the conformer has any non-zero z coordinates."""
-    import numpy as np
-
-    if not np.isclose(conf.GetPositions()[:, 2], 0.0, atol=atol).all():
-        raise ValueError("Molecule is a 3D molecule")
-
-
-def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
-    """Return a tuple of the atoms of a RDKit molecule."""
-    return mol.GetAtoms()  # type: ignore[no-any-return,no-untyped-call]
-
-
-def get_bonds(mol: Chem.Mol) -> tuple[Chem.Bond, ...]:
-    """Return a tuple of the bonds of a RDKit molecule."""
-    return mol.GetBonds()  # type: ignore[no-any-return,no-untyped-call]
-
-
-def get_neighbors(atom: Chem.Atom) -> tuple[Chem.Atom, ...]:
-    """Return a tuple of the neighbor atoms of a RDKit atom."""
-    return atom.GetNeighbors()
-
-
-def add_hydrogens(data: Sequence[str | Chem.Mol]) -> list[Chem.Mol]:
-    """Add hydrogens to the molecules."""
-    from rdkit import Chem
-
-    return [Chem.AddHs(get_smiles_mol_pair(d).mol, addCoords=True) for d in data]
-
-
 def mol_from_smiles(smiles: str) -> Chem.Mol:
     """Convert a SMILES string safely to a RDKit molecule."""
     from rdkit import Chem
@@ -147,45 +63,31 @@ def get_smiles_mol_pair(data: str | Chem.Mol) -> SmilesMolPair:
     raise TypeError("Invalid input")  # pragma: no cover
 
 
-def setup_cmap() -> list[RGBA]:  # pragma: no cover
-    """Set up the colormap."""
-    int_colors: list[tuple[int, int, int]] = [
-        (86, 180, 233),
-        (240, 228, 66),
-        (0, 114, 178),
-        (0, 158, 115),
-        (204, 121, 167),
-        (230, 159, 0),
-        (213, 94, 0),
-    ]
-
-    return [(a / 255, b / 255, c / 255, 1.0) for a, b, c in int_colors]
+def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
+    """Get the 3D position of atom at `ix` of the conformer `conf`."""
+    return conf.GetAtomPosition(ix)  # type: ignore[no-any-return]
 
 
-def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
-    """Get the ANSI color from color palette."""
-    import matplotlib as mpl
-
-    hex_color = palette[group_ix]
-    r, g, b = [int(x * 255) for x in mpl.colors.hex2color(hex_color)]
-    return f"\033[38;2;{r};{g};{b}m"
+def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
+    """Return a tuple of the atoms of a RDKit molecule."""
+    return mol.GetAtoms()  # type: ignore[no-any-return,no-untyped-call]
 
 
-def are_atoms_equal(atom_a: Chem.Atom, atom_b: Chem.Atom) -> bool:
-    """Whether to atoms have the same atomic number, aromaticity and charge."""
-    return (
-        atom_a.GetAtomicNum() == atom_b.GetAtomicNum()
-        and atom_a.GetIsAromatic() == atom_b.GetIsAromatic()
-        and atom_a.GetFormalCharge() == atom_b.GetFormalCharge()
-    )
+def get_bonds(mol: Chem.Mol) -> tuple[Chem.Bond, ...]:
+    """Return a tuple of the bonds of a RDKit molecule."""
+    return mol.GetBonds()  # type: ignore[no-any-return,no-untyped-call]
 
 
-def are_bonds_equal(bond_a: Chem.Bond, bond_b: Chem.Bond) -> bool:
-    """Whether to bonds have the same bond type and aromaticity."""
-    return (
-        bond_a.GetBondType() == bond_b.GetBondType()
-        and bond_a.GetIsAromatic() == bond_b.GetIsAromatic()
-    )
+def get_neighbors(atom: Chem.Atom) -> tuple[Chem.Atom, ...]:
+    """Return a tuple of the neighbor atoms of a RDKit atom."""
+    return atom.GetNeighbors()
+
+
+def add_hydrogens(data: Sequence[str | Chem.Mol]) -> list[Chem.Mol]:
+    """Add hydrogens to the molecules."""
+    from rdkit import Chem
+
+    return [Chem.AddHs(get_smiles_mol_pair(d).mol, addCoords=True) for d in data]
 
 
 def is_same_conformer(  # noqa: C901,PLR0911
@@ -217,8 +119,11 @@ def is_same_conformer(  # noqa: C901,PLR0911
         logger.error("Non-identical molecules")
         return False
 
-    # Basic topology
-    if mol_a.GetNumAtoms() != mol_b.GetNumAtoms() or mol_a.GetNumBonds() != mol_b.GetNumBonds():
+    # Basic topology. Unreachable in practice: identical canonical SMILES already
+    # implies identical atom/bond counts, but this stays as a defensive guard.
+    if (
+        mol_a.GetNumAtoms() != mol_b.GetNumAtoms() or mol_a.GetNumBonds() != mol_b.GetNumBonds()
+    ):  # pragma: no cover
         logger.error("Non-identical number of atoms or bonds")
         return False
 
@@ -251,11 +156,14 @@ def is_same_conformer(  # noqa: C901,PLR0911
         logger.error("Positions off by %f", max_dist)
         return False
 
+    # Unreachable in practice: the 1e7 mismatch penalty above means the optimal
+    # assignment always prefers a type-preserving pairing when one exists, and
+    # identical canonical SMILES guarantees one does. Kept as a defensive guard.
     for exp_idx, act_idx in mapping.items():
         atom_a = mol_a.GetAtomWithIdx(act_idx)
         atom_b = mol_b.GetAtomWithIdx(exp_idx)
 
-        if not are_atoms_equal(atom_a, atom_b):
+        if not are_atoms_equal(atom_a, atom_b):  # pragma: no cover
             logger.error("Non-identical atom data")
             return False
 
@@ -263,8 +171,10 @@ def is_same_conformer(  # noqa: C901,PLR0911
         a1 = mapping[bond.GetBeginAtomIdx()]
         a2 = mapping[bond.GetEndAtomIdx()]
 
+        # Unreachable in practice for the same reason: identical canonical SMILES
+        # guarantees a graph-isomorphic mapping exists between mol_a and mol_b.
         other: Chem.Bond | None = mol_a.GetBondBetweenAtoms(a1, a2)
-        if not other:
+        if not other:  # pragma: no cover
             logger.error("No bond found")
             return False
 
@@ -273,3 +183,107 @@ def is_same_conformer(  # noqa: C901,PLR0911
             return False
 
     return True
+
+
+def get_mol_center(mol_or_conf: Chem.Mol | Chem.Conformer) -> NDArray[np.float64]:
+    """Get the center of the atom."""
+    from rdkit import Chem
+
+    conf = mol_or_conf.GetConformer() if isinstance(mol_or_conf, Chem.Mol) else mol_or_conf
+    positions = conf.GetPositions()
+    return (positions.min(axis=0) + positions.max(axis=0)) / 2.0  # type: ignore[no-any-return]
+
+
+def move_molecule(mol_or_conf: Chem.Mol | Chem.Conformer, offset: NDArray[np.float64]) -> None:
+    """Translate every atom position of a molecule by `offset` (shape (3,))."""
+    from rdkit import Chem
+
+    if offset.shape != (3,):  # pragma: no cover
+        raise ValueError("Offset has wrong shape")
+
+    conf = mol_or_conf.GetConformer() if isinstance(mol_or_conf, Chem.Mol) else mol_or_conf
+    conf.SetPositions(conf.GetPositions() + offset)
+
+
+def recenter_mol(
+    mol_or_conf: Chem.Mol | Chem.Conformer,
+    new_center: NDArray[np.float64],
+    check_for_shift: NDArray[np.float64] | None,
+    atol: float,
+) -> None:
+    """Recenter a molecule to new center coordinates."""
+    import numpy as np
+
+    if new_center.shape != (3,):  # pragma: no cover
+        raise ValueError("New center has wrong shape")
+
+    if check_for_shift is not None:
+        if check_for_shift.shape != (3,):  # pragma: no cover
+            raise ValueError("Previous center has wrong shape")
+        if not np.allclose(check_for_shift, new_center, atol=atol):
+            logger.warning("The molecule was shifted")
+
+    move_molecule(mol_or_conf, new_center - get_mol_center(mol_or_conf))
+
+
+def flatten_conformer_z(mol: Chem.Mol, conf: Chem.Conformer, atol: float) -> None:
+    """Force every atom's Z-coordinate in `conf` back to exactly 0.0.
+
+    Logs a warning if an atom's Z deviates from 0 by more than `atol`.
+    """
+    from rdkit.Geometry import Point3D
+
+    for ix in range(mol.GetNumAtoms()):
+        pos = get_atom_position(conf, ix)
+        if abs(pos.z) > atol:  # pragma: no cover
+            logger.warning("Operation resulted in a non-zero z-coordinate, resetting...")
+        conf.SetAtomPosition(ix, Point3D(pos.x, pos.y, 0.0))
+
+
+def raise_if_3d_molecule(conf: Chem.Conformer, atol: float) -> None:
+    """Raise a ValueError if the conformer has any non-zero z coordinates."""
+    import numpy as np
+
+    if not np.isclose(conf.GetPositions()[:, 2], 0.0, atol=atol).all():
+        raise ValueError("Molecule is a 3D molecule")
+
+
+def are_atoms_equal(atom_a: Chem.Atom, atom_b: Chem.Atom) -> bool:
+    """Whether to atoms have the same atomic number, aromaticity and charge."""
+    return (
+        atom_a.GetAtomicNum() == atom_b.GetAtomicNum()
+        and atom_a.GetIsAromatic() == atom_b.GetIsAromatic()
+        and atom_a.GetFormalCharge() == atom_b.GetFormalCharge()
+    )
+
+
+def are_bonds_equal(bond_a: Chem.Bond, bond_b: Chem.Bond) -> bool:
+    """Whether to bonds have the same bond type and aromaticity."""
+    return (
+        bond_a.GetBondType() == bond_b.GetBondType()
+        and bond_a.GetIsAromatic() == bond_b.GetIsAromatic()
+    )
+
+
+def setup_cmap() -> list[RGBA]:  # pragma: no cover
+    """Set up the colormap."""
+    int_colors: list[tuple[int, int, int]] = [
+        (86, 180, 233),
+        (240, 228, 66),
+        (0, 114, 178),
+        (0, 158, 115),
+        (204, 121, 167),
+        (230, 159, 0),
+        (213, 94, 0),
+    ]
+
+    return [(a / 255, b / 255, c / 255, 1.0) for a, b, c in int_colors]
+
+
+def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
+    """Get the ANSI color from color palette."""
+    import matplotlib as mpl
+
+    hex_color = palette[group_ix]
+    r, g, b = [int(x * 255) for x in mpl.colors.hex2color(hex_color)]
+    return f"\033[38;2;{r};{g};{b}m"

@@ -39,7 +39,7 @@ def test_get_smiles_diff(
     new_smiles: str,
     expected: tuple[list[tuple[Diff_T, str]], list[tuple[Diff_T, str]]],
 ) -> None:
-    assert get_smiles_diff(query, new_smiles,random_seed=42) == expected
+    assert get_smiles_diff(query, new_smiles) == expected
 
 
 @pytest.mark.parametrize(
@@ -65,4 +65,4 @@ def test_get_smiles_diff(
     ],
 )
 def test_colorize_smiles_diff(query: str, new_smiles: str, expected: tuple[str, str]) -> None:
-    assert colorize_smiles_diff(query, new_smiles,random_seed=42) == expected
+    assert colorize_smiles_diff(query, new_smiles) == expected

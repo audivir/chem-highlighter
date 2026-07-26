@@ -113,7 +113,7 @@ class HighlightBackendDocument(ABC):
 
     def to_console(self, canonical: bool = True) -> str:
         """Return a highlighted (if set) string visualization of the molecule."""
-        raise NotImplementedError
+        raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
     def align_to_reference(self, reference: str) -> None:

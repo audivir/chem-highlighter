@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pytest
@@ -10,9 +10,10 @@ from conftest import from_fixture_molblock
 from rdkit import Chem
 from rdkit.Chem.rdDepictor import Compute2DCoords
 from rdkit.Chem.rdmolops import Kekulize
+from rdkit.Chem.rdMolTransforms import TransformConformer
 
 from chem_highlighter.modify import apply_transform, flip_bond, make_transform, parse_transform
-from chem_highlighter.utils import is_same_conformer
+from chem_highlighter.utils import get_mol_center, is_same_conformer, move_molecule
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -490,6 +491,30 @@ def test_apply_transform(
         q, -angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical, atol=atol
     )
     assert is_same_conformer(q, q_orig, atol=atol)
+
+
+@pytest.mark.parametrize(
+    ("recenter", "expected_center"),
+    [("origin", np.zeros(3)), ("previous", np.array([10.0, -4.0, 0.0])), ("none", None)],
+)
+def test_apply_transform_recenter_modes(
+    recenter: Literal["origin", "previous", "none"], expected_center: NDArray[np.float64] | None
+) -> None:
+    atol = 1e-5
+    q_orig = from_fixture_molblock("ethanol.mol")
+
+    move_molecule(q_orig, np.array([10.0, -4.0, 0.0]))
+
+    q = apply_transform(q_orig, 30.0, recenter=recenter, atol=atol)
+
+    matrix = make_transform(30.0, flip_vertical=False)
+    TransformConformer(q_orig.GetConformer(), matrix)
+    raw_center = get_mol_center(q_orig)
+
+    if expected_center is None:
+        expected_center = raw_center
+
+    np.testing.assert_allclose(get_mol_center(q), expected_center, atol=atol)
 
 
 @pytest.mark.parametrize(
