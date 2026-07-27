@@ -264,7 +264,7 @@ class RDKitDocument(HighlightBackendDocument):
             if hml:
                 for ix in hml.highlighted_atoms:
                     atom = mol.GetAtomWithIdx(ix)
-                    if atom.GetSymbol() == "H" and atom.GetIsotope() == 0: # pragma: no branch
+                    if atom.GetSymbol() == "H" and atom.GetIsotope() == 0:  # pragma: no branch
                         atom.SetIsotope(SENTINEL_ISOTOPE)
 
             mol = Chem.RemoveHs(mol)

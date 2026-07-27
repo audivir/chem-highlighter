@@ -177,12 +177,12 @@ def test_set_hydrogen_display_mol(show_hydrogens: bool, expected_fixture: str) -
 def test_set_hydrogen_display_keeps_a_highlighted_hydrogen_when_hiding() -> None:
     doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc.set_hydrogen_display_callback(False)
-    assert doc.mol.GetNumAtoms() == 3 # only 2 Cs and [2H]
+    assert doc.mol.GetNumAtoms() == 3  # only 2 Cs and [2H]
 
     doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc.set_hml(HML(highlighted_atoms={0: 0}, palette=["#ff0000"]))
     doc.set_hydrogen_display_callback(False)
-    assert doc.mol.GetNumAtoms() == 4 # 2 Cs, [2H], and highlighted [H]
+    assert doc.mol.GetNumAtoms() == 4  # 2 Cs, [2H], and highlighted [H]
 
 
 def test_cleanup() -> None:
