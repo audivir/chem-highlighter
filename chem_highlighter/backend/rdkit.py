@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING, Literal, TypeAlias
 import matplotlib as mpl
 from typing_extensions import Self, override
 
-from chem_highlighter.align import get_alignment_flips_and_transform
 from chem_highlighter.backend.map_tokens import map_smiles_tokens
 from chem_highlighter.hml import HML, EditState, HighlightBackendDocument
-from chem_highlighter.modify import apply_transform, flip_bond, parse_transform
+from chem_highlighter.modify import apply_transform, flip_bond
 from chem_highlighter.utils import RESET_COLOR, get_ansi_color, get_atoms
 
 if TYPE_CHECKING:
@@ -214,18 +213,15 @@ class RDKitDocument(HighlightBackendDocument):
         return draw_mol(self.get_hml(), self.mol, "png")
 
     @override
-    def align_to_reference_callback(self, reference: str) -> None:
+    def align_to_reference_callback(
+        self, flips: list[tuple[int, int]], global_flip: bool, angle: float
+    ) -> None:
         """Align the underlying molecule to a reference molecule."""
-        from rdkit import Chem
-
         atol = 1e-5
         query = self.mol
-        reference_mol = Chem.MolFromMolBlock(reference)
-        flips, transform = get_alignment_flips_and_transform(query, reference_mol, atol=atol)
-        global_flip, found_angle = parse_transform(transform, atol=atol)
         for bond_ix, anchor_atom_ix in flips:
             query = flip_bond(query, bond_ix, anchor_atom_ix, atol=atol)
-        query = apply_transform(query, found_angle, flip_horizontal=global_flip, atol=atol)
+        query = apply_transform(query, angle, flip_horizontal=global_flip, atol=atol)
         self.mol = query
 
     @override
@@ -250,33 +246,28 @@ class RDKitDocument(HighlightBackendDocument):
             SanitizeMol(self.mol, Chem.SANITIZE_SETAROMATICITY)
 
     @override
-    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
-        """Show or hide hydrogens on carbon atoms."""
+    def hide_hydrogens_callback(self) -> None:
+        """Hide featureless hydrogens on carbon atoms."""
         from rdkit import Chem
 
-        if show_hydrogens:
-            atoms = self.mol.GetAtoms()  # type: ignore[no-untyped-call]
-            carbon_ixs = [atom.GetIdx() for atom in atoms if atom.GetSymbol() == "C"]
-            self.mol = Chem.AddHs(self.mol, onlyOnAtoms=carbon_ixs, addCoords=True)
-        else:
-            mol = Chem.Mol(self.mol)
-            hml = self.get_hml()
-            if hml:
-                for ix in hml.highlighted_atoms:
-                    atom = mol.GetAtomWithIdx(ix)
-                    if atom.GetSymbol() == "H" and atom.GetIsotope() == 0:  # pragma: no branch
-                        atom.SetIsotope(SENTINEL_ISOTOPE)
+        mol = Chem.Mol(self.mol)
+        hml = self.get_hml()
+        if hml:
+            for ix in hml.highlighted_atoms:
+                atom = mol.GetAtomWithIdx(ix)
+                if atom.GetSymbol() == "H" and atom.GetIsotope() == 0:  # pragma: no branch
+                    atom.SetIsotope(SENTINEL_ISOTOPE)
 
-            mol = Chem.RemoveHs(mol)
+        mol = Chem.RemoveHs(mol)
 
-            for atom in get_atoms(mol):
-                if atom.GetSymbol() == "H" and atom.GetIsotope() == SENTINEL_ISOTOPE:
-                    atom.SetIsotope(0)
+        for atom in get_atoms(mol):
+            if atom.GetSymbol() == "H" and atom.GetIsotope() == SENTINEL_ISOTOPE:
+                atom.SetIsotope(0)
 
-            self.mol = mol
+        self.mol = mol
 
     @override
-    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
+    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool | None) -> None:
         """Do nothing as highlighting occurs during visualization only."""
 
     @override

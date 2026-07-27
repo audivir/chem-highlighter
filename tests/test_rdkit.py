@@ -134,54 +134,35 @@ def test_kekulize(kekulize: bool) -> None:
 
 
 @pytest.mark.parametrize(
-    ("base", "hide", "show"),
+    ("base", "hide"),
     [
-        ("CC", "CC", "[H]C([H])([H])C([H])([H])[H]"),
-        ("C([2H])C[H]", "[2H]CC", "[H]C([H])([H])C([H])([H])[2H]"),
-        ("c1ccn([H])c1", "c1cc[nH]c1", "[H]c1[nH]c([H])c([H])c1[H]"),
-        ("[H]c1n([H])c([H])c([H])c1[H]", "c1cc[nH]c1", "[H]c1[nH]c([H])c([H])c1[H]"),
-        ("c1cc([2H])n([H])c1", "[2H]c1ccc[nH]1", "[H]c1[nH]c([2H])c([H])c1[H]"),
+        ("CC", "CC"),
+        ("C([2H])C[H]", "[2H]CC"),
+        ("c1ccn([H])c1", "c1cc[nH]c1"),
+        ("[H]c1n([H])c([H])c([H])c1[H]", "c1cc[nH]c1"),
+        ("c1cc([2H])n([H])c1", "[2H]c1ccc[nH]1"),
     ],
 )
-def test_set_hydrogen_display_smiles_table(base: str, hide: str, show: str) -> None:
-    hidden = RDKitDocument.from_mol(mol_from_smiles(base))
-    hidden.set_hydrogen_display_callback(False)
-    assert_mols_equal(hidden.mol, hide)
-
-    # roundtrip
-    hidden.set_hydrogen_display_callback(True)
-    assert Chem.MolToSmiles(hidden.mol) == Chem.MolToSmiles(_mol_from_explicit_smiles(show))
-
-    shown = RDKitDocument.from_mol(mol_from_smiles(base))
-    shown.set_hydrogen_display_callback(True)
-    assert Chem.MolToSmiles(shown.mol) == Chem.MolToSmiles(_mol_from_explicit_smiles(show))
-
-    # roundtrip
-    shown.set_hydrogen_display_callback(False)
-    assert Chem.MolToSmiles(shown.mol) == Chem.MolToSmiles(_mol_from_explicit_smiles(hide))
+def test_hide_hydrogens_smiles_table(base: str, hide: str) -> None:
+    doc = RDKitDocument.from_mol(mol_from_smiles(base))
+    doc.hide_hydrogens_callback()
+    assert_mols_equal(doc.mol, hide)
 
 
-@pytest.mark.parametrize(
-    ("show_hydrogens", "expected_fixture"),
-    [
-        (True, "hs_mol_show.mol"),
-        (False, "hs_mol_hide.mol"),
-    ],
-)
-def test_set_hydrogen_display_mol(show_hydrogens: bool, expected_fixture: str) -> None:
+def test_hide_hydrogens_mol() -> None:
     doc = RDKitDocument.from_mol(from_fixture_molblock("hs_mol_base.mol"))
-    doc.set_hydrogen_display(show_hydrogens)
-    assert_mols_equal(doc.mol, from_fixture_molblock(expected_fixture))
+    doc.hide_hydrogens()
+    assert_mols_equal(doc.mol, from_fixture_molblock("hs_mol_hide.mol"))
 
 
-def test_set_hydrogen_display_keeps_a_highlighted_hydrogen_when_hiding() -> None:
+def test_hide_hydrogens_keeps_a_highlighted_hydrogen() -> None:
     doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
-    doc.set_hydrogen_display_callback(False)
+    doc.hide_hydrogens_callback()
     assert doc.mol.GetNumAtoms() == 3  # only 2 Cs and [2H]
 
     doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc.set_hml(HML(highlighted_atoms={0: 0}, palette=["#ff0000"]))
-    doc.set_hydrogen_display_callback(False)
+    doc.hide_hydrogens_callback()
     assert doc.mol.GetNumAtoms() == 4  # 2 Cs, [2H], and highlighted [H]
 
 

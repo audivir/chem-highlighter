@@ -91,18 +91,18 @@ def test_highlight_from_json() -> None:
     assert doc_hml.palette == ["#ff0000"]
 
 
-def test_highlight_from_json_with_show_hydrogens_marks_hydrogen_display_set() -> None:
+def test_highlight_from_json_with_hide_hydrogens_marks_hydrogens_hidden() -> None:
     from chem_highlighter.backend.rdkit import RDKitDocument
     from chem_highlighter.utils import mol_from_smiles
 
     doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
     hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
     doc.highlight_from_json(msgspec.json.encode(hml).decode(), True)
-    assert doc.get_edit_state().hydrogen_display_set is True
+    assert doc.get_edit_state().hydrogens_hidden is True
     with pytest.raises(
         ValueError, match="Setting hydrogen display after highlighting not supported"
     ):
-        doc.set_hydrogen_display(False)
+        doc.hide_hydrogens()
 
 
 def test_cleanup_succeeds() -> None:
@@ -146,18 +146,18 @@ def test_kekulize_raises_when_already_kekulized() -> None:
         doc.kekulize(False)
 
 
-def test_set_hydrogen_display_raises_when_already_set() -> None:
+def test_hide_hydrogens_raises_when_already_set() -> None:
     from chem_highlighter.backend.rdkit import RDKitDocument
     from chem_highlighter.utils import mol_from_smiles
 
     doc = RDKitDocument.from_mol(mol_from_smiles("CC"))
-    doc.set_hydrogen_display(True)
+    doc.hide_hydrogens()
     with pytest.raises(ValueError, match="Hydrogen display already set"):
-        doc.set_hydrogen_display(False)
+        doc.hide_hydrogens()
 
 
-def test_set_hydrogen_display_raises_after_highlighting() -> None:
-    """Adding/removing hydrogens shifts atom and bond indices.
+def test_hide_hydrogens_raises_after_highlighting() -> None:
+    """Removing hydrogens shifts atom and bond indices.
 
     This would silently invalidate any highlights already set, so it must be rejected instead.
     """
@@ -170,7 +170,7 @@ def test_set_hydrogen_display_raises_after_highlighting() -> None:
     with pytest.raises(
         ValueError, match="Setting hydrogen display after highlighting not supported"
     ):
-        doc.set_hydrogen_display(True)
+        doc.hide_hydrogens()
 
 
 def test_highlight_from_json_raises_when_already_highlighted() -> None:
@@ -184,12 +184,12 @@ def test_highlight_from_json_raises_when_already_highlighted() -> None:
         doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
 
 
-def test_highlight_from_json_raises_after_hydrogen_display_set() -> None:
+def test_highlight_from_json_raises_after_hydrogens_hidden() -> None:
     from chem_highlighter.backend.rdkit import RDKitDocument
     from chem_highlighter.utils import mol_from_smiles
 
     doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    doc.set_hydrogen_display(True)
+    doc.hide_hydrogens()
     hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
     with pytest.raises(
         ValueError, match="Highlighting after setting hydrogen display not supported"

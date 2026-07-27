@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, NamedTuple, final
 import msgspec
 from typing_extensions import Self, TypeVar
 
+from chem_highlighter.align import get_alignment_ops_from_molblock
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
 
@@ -84,7 +86,7 @@ class EditState(NamedTuple):
 
     kekulized: bool | None
     aligned: bool
-    hydrogen_display_set: bool
+    hydrogens_hidden: bool
 
 
 class HighlightBackendDocument(ABC):
@@ -137,7 +139,9 @@ class HighlightBackendDocument(ABC):
         raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
-    def align_to_reference_callback(self, reference: str) -> None:
+    def align_to_reference_callback(
+        self, flips: list[tuple[int, int]], global_flip: bool, angle: float
+    ) -> None:
         """Run after alignment checks are done by `align_to_reference`."""
 
     @final
@@ -151,7 +155,10 @@ class HighlightBackendDocument(ABC):
         if edit_state.aligned:
             raise ValueError("Already aligned")
         self.set_edit_state(edit_state._replace(aligned=True))
-        self.align_to_reference_callback(reference)
+        flips, global_flip, angle = get_alignment_ops_from_molblock(
+            self.to_molblock(), reference, atol=1e-5
+        )
+        self.align_to_reference_callback(flips, global_flip, angle)
         return self
 
     @abstractmethod
@@ -182,37 +189,37 @@ class HighlightBackendDocument(ABC):
         return self
 
     @abstractmethod
-    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
-        """Run after hydrogen options are set by `set_hydrogen_display`."""
+    def hide_hydrogens_callback(self) -> None:
+        """Run after the checks in `hide_hydrogens` pass."""
 
     @final
-    def set_hydrogen_display(self, show_hydrogens: bool) -> Self:
-        """Show or hide hydrogens."""
+    def hide_hydrogens(self) -> Self:
+        """Hide featureless hydrogens."""
         if self.get_hml():
             raise ValueError("Setting hydrogen display after highlighting not supported")
         edit_state = self.get_edit_state()
-        if edit_state.hydrogen_display_set:
+        if edit_state.hydrogens_hidden:
             raise ValueError("Hydrogen display already set")
-        self.set_edit_state(edit_state._replace(hydrogen_display_set=True))
-        self.set_hydrogen_display_callback(show_hydrogens)
+        self.set_edit_state(edit_state._replace(hydrogens_hidden=True))
+        self.hide_hydrogens_callback()
         return self
 
     @abstractmethod
-    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
+    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool | None) -> None:
         """Run after highlighting options are set by `highlight_from_json`."""
 
     @final
-    def highlight_from_json(self, hml_json: str, show_hydrogens: bool | None) -> Self:
+    def highlight_from_json(self, hml_json: str, hide_hydrogens: bool | None) -> Self:
         """Set the underlying highlighting options and run the backend's callback."""
         if self.get_hml():
             raise ValueError("Already highlighted")
         edit_state = self.get_edit_state()
-        if edit_state.hydrogen_display_set:
+        if edit_state.hydrogens_hidden:
             raise ValueError("Highlighting after setting hydrogen display not supported")
-        if show_hydrogens is not None:
-            self.set_edit_state(edit_state._replace(hydrogen_display_set=True))
+        if hide_hydrogens is not None:
+            self.set_edit_state(edit_state._replace(hydrogens_hidden=True))
         self.set_hml(msgspec.json.Decoder(HML).decode(hml_json))
-        self.highlight_from_json_callback(hml_json, show_hydrogens)
+        self.highlight_from_json_callback(hml_json, hide_hydrogens)
         return self
 
     @final
