@@ -160,6 +160,26 @@ def test_set_hydrogen_display(show: bool) -> None:
         assert doc.mol.GetNumAtoms() == heavy_count
 
 
+def test_set_hydrogen_display_toggle_all_removes_a_featured_hydrogen() -> None:
+    """toggle_all=True must remove even a "featured" hydrogen (non-default isotope here),
+
+    which `toggle_all=False`'s featureless-only `RemoveHs` deliberately preserves -- this is
+    the whole reason `toggle_all` exists as a separate, explicit opt-in.
+    """
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles("CC[2H]")
+    heavy_count = 2
+
+    featureless_only = RDKitDocument.from_mol(Chem.Mol(mol))
+    featureless_only.set_hydrogen_display(False, toggle_all=False)
+    assert featureless_only.mol.GetNumAtoms() == heavy_count + 1
+
+    unconditional = RDKitDocument.from_mol(Chem.Mol(mol))
+    unconditional.set_hydrogen_display(False, toggle_all=True)
+    assert unconditional.mol.GetNumAtoms() == heavy_count
+
+
 def test_set_hydrogen_display_round_trip_returns_to_heavy_atom_count() -> None:
     doc = _doc("CC")
     heavy_count = doc.mol.GetNumAtoms()

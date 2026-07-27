@@ -239,22 +239,32 @@ class RDKitDocument(HighlightBackendDocument):
             SanitizeMol(self.mol, Chem.SANITIZE_SETAROMATICITY)
 
     @override
-    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
-        """Show or hide featureless and non-highlighted hydrogens."""
+    def set_hydrogen_display_callback(self, show_hydrogens: bool, toggle_all: bool = False) -> None:
+        """Show or hide hydrogens.
+
+        `toggle_all=False` (default): only affects featureless hydrogens (no isotope, charge,
+        stereo relevance, etc.) -- `Chem.RemoveHs`'s own default semantics, regardless of
+        whether a given hydrogen was already explicit in the molecule or not. `toggle_all=True`
+        removes every hydrogen unconditionally via `Chem.RemoveAllHs`.
+        """
         from rdkit import Chem
 
         if show_hydrogens:
             self.mol = Chem.AddHs(self.mol)
+        elif toggle_all:
+            self.mol = Chem.RemoveAllHs(self.mol)
         else:
             rhps = Chem.RemoveHsParameters()
             rhps.removeMapped = False  # type: ignore[assignment]
             self.mol = Chem.RemoveHs(self.mol, rhps)
 
     @override
-    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
+    def highlight_from_json_callback(
+        self, hml_json: str, show_hydrogens: bool | None, toggle_all: bool = False
+    ) -> None:
         """Do nothing as highlighting occurs during visualization only."""
         if show_hydrogens is not None:
-            self.set_hydrogen_display(show_hydrogens)
+            self.set_hydrogen_display(show_hydrogens, toggle_all)
 
     @override
     def to_console(self, canonical: bool = True) -> str:

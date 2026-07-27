@@ -132,11 +132,13 @@ class HighlightBackendDocument(ABC):
         """Kekulize or dekekulize the underlying molecule."""
 
     @abstractmethod
-    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
+    def set_hydrogen_display_callback(self, show_hydrogens: bool, toggle_all: bool = False) -> None:
         """Run after hydrogen options are set by `set_hydrogen_display`."""
 
     @abstractmethod
-    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
+    def highlight_from_json_callback(
+        self, hml_json: str, show_hydrogens: bool | None, toggle_all: bool = False
+    ) -> None:
         """Run after highlighting options are set by `highlight_from_json`."""
 
     def to_hmol_json(self) -> str:
@@ -147,11 +149,19 @@ class HighlightBackendDocument(ABC):
                 setattr(hmol, field, getattr(self.hml, field))
         return msgspec.json.encode(hmol).decode()
 
-    def set_hydrogen_display(self, show_hydrogens: bool) -> None:
-        """Show or hide featureless and non-highlighted hydrogens."""
-        self.set_hydrogen_display_callback(show_hydrogens)
+    def set_hydrogen_display(self, show_hydrogens: bool, toggle_all: bool = False) -> None:
+        """Show or hide hydrogens.
 
-    def highlight_from_json(self, hml_json: str, show_hydrogens: bool | None) -> None:
+        By default (`toggle_all=False`) only affects featureless and non-highlighted
+        hydrogens, leaving any hydrogen already explicit in the molecule alone.
+        `toggle_all=True` shows/hides every hydrogen unconditionally, including ones already
+        explicit in the molecule.
+        """
+        self.set_hydrogen_display_callback(show_hydrogens, toggle_all)
+
+    def highlight_from_json(
+        self, hml_json: str, show_hydrogens: bool | None, toggle_all: bool = False
+    ) -> None:
         """Set the underlying highlighting options and run the backend's callback."""
         self.hml = msgspec.json.Decoder(HML).decode(hml_json)
-        self.highlight_from_json_callback(hml_json, show_hydrogens)
+        self.highlight_from_json_callback(hml_json, show_hydrogens, toggle_all)
