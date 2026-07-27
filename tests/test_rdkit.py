@@ -138,9 +138,12 @@ def test_kekulize(kekulize: bool) -> None:
             Chem.BondType.SINGLE,
             Chem.BondType.DOUBLE,
         }
-        assert [bond.GetBondType() for bond in ring_bonds] == [
-            Chem.BondType.SINGLE if i % 2 == 0 else Chem.BondType.DOUBLE for i in range(6)
+        kekule_bonds = [
+            [Chem.BondType.SINGLE if i % 2 == modulo else Chem.BondType.DOUBLE for i in range(6)]
+            for modulo in (0, 1)
         ]
+
+        assert [bond.GetBondType() for bond in ring_bonds] in kekule_bonds
         assert 4 not in bond_type_codes, "exported Mol block still has aromatic bond codes"
         assert set(bond_type_codes) == {1, 2}
     else:
