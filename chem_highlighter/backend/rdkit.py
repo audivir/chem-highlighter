@@ -175,7 +175,12 @@ class RDKitDocument(HighlightBackendDocument):
         """Return the underlying molecule as Mol block."""
         from rdkit import Chem
 
-        return Chem.MolToMolBlock(self.mol, forceV3000=True)
+        # `Chem.MolToMolBlock` defaults to `kekulize=True` unconditionally ("as suggested by the
+        # MDL spec"), which would silently ignore `kekulize(False)` -- the exported file would
+        # always come out kekulized regardless of `self._kekulized`. Pass it through explicitly
+        # so dekekulize() actually has an effect on the exported Mol block, not just the
+        # in-memory RDKit bond objects.
+        return Chem.MolToMolBlock(self.mol, forceV3000=True, kekulize=self._kekulized)
 
     @override
     def to_svg(self) -> str:
