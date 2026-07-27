@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import msgspec
+import numpy as np
 import pytest
-from conftest import from_fixture_molblock
+from conftest import assert_mols_equal, extract_bond_codes, from_fixture_molblock
 from rdkit import Chem
 
 from chem_highlighter.backend.rdkit import RDKitDocument
-from chem_highlighter.hml import HML
-from chem_highlighter.utils import is_same_conformer, mol_from_smiles
+from chem_highlighter.hml import HML, EditState
+from chem_highlighter.utils import is_same_conformer, mol_from_smiles, move_molecule
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -22,12 +22,18 @@ def _doc(smiles: str) -> RDKitDocument:
     return RDKitDocument.from_mol(mol_from_smiles(smiles))
 
 
+def _mol_from_explicit_smiles(smiles: str) -> Chem.Mol:
+    """Parse a SMILES string without collapsing its explicit hydrogen atoms to implicit ones."""
+    params = Chem.SmilesParserParams()
+    params.removeHs = False  # type: ignore[assignment]
+    return Chem.MolFromSmiles(smiles, params)
+
+
 def test_from_mol() -> None:
     doc = _doc("CCO")
     assert doc.mol.GetNumAtoms() == 3
-    assert doc.hml is None
-    assert not doc._aligned  # noqa: SLF001
-    assert not doc._kekulized  # noqa: SLF001
+    assert doc.get_hml() is None
+    assert doc.get_edit_state() == EditState(None, False, False)
 
 
 def test_from_molblock() -> None:
@@ -101,144 +107,108 @@ def test_to_console() -> None:
     assert doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1ccc\033[38;2;255;0;0m(C)\033[0mcc1"
 
 
-def _v3000_bond_type_codes(molblock: str) -> list[int]:
-    """Bond type codes (1=single, 2=double, 4=aromatic, ...) from a V3000 Mol block's BOND
-    block, in file order -- the actual on-disk representation, not RDKit's in-memory bond
-    objects (which is what a downstream consumer of the exported file, e.g. ChemDraw, sees).
-    """
-    codes = []
-    in_bond_block = False
-    for line in molblock.splitlines():
-        stripped = line.strip()
-        if stripped == "M  V30 BEGIN BOND":
-            in_bond_block = True
-        elif stripped == "M  V30 END BOND":
-            in_bond_block = False
-        elif in_bond_block:
-            codes.append(int(line.split()[3]))
-    return codes
-
-
 @pytest.mark.parametrize("kekulize", [True, False])
 def test_kekulize(kekulize: bool) -> None:
     doc = _doc("c1ccccc1")
     doc.kekulize(kekulize)
-    assert doc._kekulized == kekulize  # noqa: SLF001
+    assert doc.get_edit_state().kekulized == kekulize
 
     ring_bonds = [doc.mol.GetBondBetweenAtoms(i, (i + 1) % 6) for i in range(6)]
-    bond_type_codes = _v3000_bond_type_codes(doc.to_molblock())
-    if kekulize:
-        # `Chem.Kekulize` sets explicit SINGLE/DOUBLE bond types but, by default, does not clear
-        # the separate `IsAromatic` bookkeeping flag on the bond -- that's RDKit's own intended
-        # default behavior and doesn't leak into the exported file, so it's not asserted here.
-        # What actually matters -- whether the *file* really shows a kekulized structure, the
-        # same question this test failed to answer before -- is checked via the Mol block's own
-        # bond type codes, which must NOT be 4 (aromatic) once kekulized.
-        assert {bond.GetBondType() for bond in ring_bonds} == {
-            Chem.BondType.SINGLE,
-            Chem.BondType.DOUBLE,
-        }
-        kekule_bonds = [
-            [Chem.BondType.SINGLE if i % 2 == modulo else Chem.BondType.DOUBLE for i in range(6)]
-            for modulo in (0, 1)
-        ]
+    ring_bond_types = [b.GetBondType() for b in ring_bonds]
+    bond_type_codes = extract_bond_codes(doc.to_molblock())
+    kekule_bonds = [
+        [Chem.BondType.SINGLE if i % 2 == modulo else Chem.BondType.DOUBLE for i in range(6)]
+        for modulo in (0, 1)
+    ]
 
-        assert [bond.GetBondType() for bond in ring_bonds] in kekule_bonds
+    assert all(bond.GetIsAromatic() for bond in ring_bonds)
+
+    if kekulize:
+        assert set(ring_bond_types) == {Chem.BondType.SINGLE, Chem.BondType.DOUBLE}
+        assert ring_bond_types in kekule_bonds
         assert 4 not in bond_type_codes, "exported Mol block still has aromatic bond codes"
         assert set(bond_type_codes) == {1, 2}
     else:
-        assert all(bond.GetIsAromatic() for bond in ring_bonds)
-        assert all(bond.GetBondType() == Chem.BondType.AROMATIC for bond in ring_bonds)
+        assert set(ring_bond_types) == {Chem.BondType.AROMATIC}
         assert set(bond_type_codes) == {4}, "exported Mol block should use the aromatic bond code"
 
 
-@pytest.mark.parametrize("show", [True, False])
-def test_set_hydrogen_display(show: bool) -> None:
-    doc = _doc("CC")
-    heavy_count = doc.mol.GetNumAtoms()
-    doc.set_hydrogen_display(show)
-    if show:
-        assert doc.mol.GetNumAtoms() > heavy_count
-    else:
-        assert doc.mol.GetNumAtoms() == heavy_count
+@pytest.mark.parametrize(
+    ("base", "hide", "show"),
+    [
+        ("CC", "CC", "[H]C([H])([H])C([H])([H])[H]"),
+        ("C([2H])C[H]", "[2H]CC", "[H]C([H])([H])C([H])([H])[2H]"),
+        ("c1ccn([H])c1", "c1cc[nH]c1", "[H]c1[nH]c([H])c([H])c1[H]"),
+        ("[H]c1n([H])c([H])c([H])c1[H]", "c1cc[nH]c1", "[H]c1[nH]c([H])c([H])c1[H]"),
+        ("c1cc([2H])n([H])c1", "[2H]c1ccc[nH]1", "[H]c1[nH]c([2H])c([H])c1[H]"),
+    ],
+)
+def test_set_hydrogen_display_smiles_table(base: str, hide: str, show: str) -> None:
+    hidden = RDKitDocument.from_mol(mol_from_smiles(base))
+    hidden.set_hydrogen_display_callback(False)
+    assert_mols_equal(hidden.mol, hide)
+
+    # roundtrip
+    hidden.set_hydrogen_display_callback(True)
+    assert Chem.MolToSmiles(hidden.mol) == Chem.MolToSmiles(_mol_from_explicit_smiles(show))
+
+    shown = RDKitDocument.from_mol(mol_from_smiles(base))
+    shown.set_hydrogen_display_callback(True)
+    assert Chem.MolToSmiles(shown.mol) == Chem.MolToSmiles(_mol_from_explicit_smiles(show))
+
+    # roundtrip
+    shown.set_hydrogen_display_callback(False)
+    assert Chem.MolToSmiles(shown.mol) == Chem.MolToSmiles(_mol_from_explicit_smiles(hide))
 
 
-def test_set_hydrogen_display_toggle_all_removes_a_featured_hydrogen() -> None:
-    """toggle_all=True must remove even a "featured" hydrogen (non-default isotope here),
-
-    which `toggle_all=False`'s featureless-only `RemoveHs` deliberately preserves -- this is
-    the whole reason `toggle_all` exists as a separate, explicit opt-in.
-    """
-    from rdkit import Chem
-
-    mol = Chem.MolFromSmiles("CC[2H]")
-    heavy_count = 2
-
-    featureless_only = RDKitDocument.from_mol(Chem.Mol(mol))
-    featureless_only.set_hydrogen_display(False, toggle_all=False)
-    assert featureless_only.mol.GetNumAtoms() == heavy_count + 1
-
-    unconditional = RDKitDocument.from_mol(Chem.Mol(mol))
-    unconditional.set_hydrogen_display(False, toggle_all=True)
-    assert unconditional.mol.GetNumAtoms() == heavy_count
+@pytest.mark.parametrize(
+    ("show_hydrogens", "expected_fixture"),
+    [
+        (True, "hs_mol_show.mol"),
+        (False, "hs_mol_hide.mol"),
+    ],
+)
+def test_set_hydrogen_display_mol(show_hydrogens: bool, expected_fixture: str) -> None:
+    doc = RDKitDocument.from_mol(from_fixture_molblock("hs_mol_base.mol"))
+    doc.set_hydrogen_display(show_hydrogens)
+    assert_mols_equal(doc.mol, from_fixture_molblock(expected_fixture))
 
 
-def test_set_hydrogen_display_round_trip_returns_to_heavy_atom_count() -> None:
-    doc = _doc("CC")
-    heavy_count = doc.mol.GetNumAtoms()
-    doc.set_hydrogen_display(True)
-    assert doc.mol.GetNumAtoms() > heavy_count
-    doc.set_hydrogen_display(False)
-    assert doc.mol.GetNumAtoms() == heavy_count
+def test_set_hydrogen_display_keeps_a_highlighted_hydrogen_when_hiding() -> None:
+    doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
+    doc.set_hydrogen_display_callback(False)
+    assert doc.mol.GetNumAtoms() == 3 # only 2 Cs and [2H]
 
-
-def test_set_hydrogen_display_hides_a_hydrogen_that_was_already_explicit() -> None:
-    """A hydrogen already explicit in the input (not just newly shown) must also be hidden.
-
-    `set_hydrogen_display_callback(False)` -> `Chem.RemoveHs` -- confirm it doesn't only remove
-    the hydrogens *it* added via a prior `show`, but any plain explicit hydrogen already present
-    on the molecule (e.g. from a Mol block written with an explicit H atom).
-    """
-    from rdkit import Chem
-
-    mol = mol_from_smiles("CC")
-    heavy_count = mol.GetNumAtoms()
-    # Materialize atom 0's implicit hydrogens as real, explicit atoms -- simulating input that
-    # already had an explicit hydrogen before `set_hydrogen_display` is ever called.
-    mol_with_explicit_h = Chem.AddHs(mol, onlyOnAtoms=[0])
-    assert mol_with_explicit_h.GetNumAtoms() > heavy_count
-
-    doc = RDKitDocument.from_mol(mol_with_explicit_h)
-    doc.set_hydrogen_display(False)
-    assert doc.mol.GetNumAtoms() == heavy_count
-
-    doc.set_hydrogen_display(True)
-    doc.set_hydrogen_display(False)
-    assert doc.mol.GetNumAtoms() == heavy_count
+    doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
+    doc.set_hml(HML(highlighted_atoms={0: 0}, palette=["#ff0000"]))
+    doc.set_hydrogen_display_callback(False)
+    assert doc.mol.GetNumAtoms() == 4 # 2 Cs, [2H], and highlighted [H]
 
 
 def test_cleanup() -> None:
-    doc = _doc("c1ccccc1")
+    atol = 1e-5
+
+    doc = _doc("c1cnccc1")
+    move_molecule(doc.mol, np.array([1.0, 1.0, 1.0]))
+
+    expected = _doc("c1cnccc1")
+    assert not is_same_conformer(doc.to_molblock(), expected.to_molblock(), atol=atol)
+
     doc.cleanup()
-    assert doc.mol.GetNumAtoms() == 6
+    assert is_same_conformer(doc.to_molblock(), expected.to_molblock(), atol=atol)
 
 
-def test_cleanup_after_kekulize_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
+def test_cleanup_after_raises() -> None:
     doc = _doc("c1ccccc1")
     doc.kekulize(True)
-    with caplog.at_level(logging.WARNING, logger="chem_highlighter.backend.rdkit"):
+
+    with pytest.raises(ValueError, match="Cleanup after kekulization or alignment not supported"):
         doc.cleanup()
-    assert "Kekulization" in caplog.text
 
-
-def test_cleanup_after_align_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
-
-    doc = _doc("CCO")
-    ref = _doc("CCO")
-    doc.align_to_reference(ref.to_molblock())
-    with caplog.at_level(logging.WARNING, logger="chem_highlighter.backend.rdkit"):
+    doc = _doc("c1ccccc1")
+    doc.align_to_reference(doc.to_molblock())
+    with pytest.raises(ValueError, match="Cleanup after kekulization or alignment not supported"):
         doc.cleanup()
-    assert "Alignment" in caplog.text
 
 
 @pytest.mark.parametrize(

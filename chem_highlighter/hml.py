@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from statistics import mean
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple, final
 
 import msgspec
 from typing_extensions import Self, TypeVar
@@ -79,11 +79,32 @@ class HMol(HML):
     mol: str
 
 
+class EditState(NamedTuple):
+    """A tuple to store the edit state."""
+
+    kekulized: bool | None
+    aligned: bool
+    hydrogen_display_set: bool
+
+
 class HighlightBackendDocument(ABC):
     """A structure to store a molecule for highlighting."""
 
-    hml: HML | None
-    """Highlighting options or None if not highlighted."""
+    @abstractmethod
+    def get_edit_state(self) -> EditState:
+        """Get the edit state tuple."""
+
+    @abstractmethod
+    def set_edit_state(self, edit_state: EditState) -> None:
+        """Set the edit state."""
+
+    @abstractmethod
+    def get_hml(self) -> HML | None:
+        """Get the HML object."""
+
+    @abstractmethod
+    def set_hml(self, hml: HML) -> None:
+        """Set the HML object."""
 
     @classmethod
     @abstractmethod
@@ -116,52 +137,89 @@ class HighlightBackendDocument(ABC):
         raise NotImplementedError  # pragma: no cover
 
     @abstractmethod
-    def align_to_reference(self, reference: str) -> None:
+    def align_to_reference_callback(self, reference: str) -> None:
+        """Run after alignment checks are done by `align_to_reference`."""
+
+    @final
+    def align_to_reference(self, reference: str) -> Self:
         """Align the underlying molecule to a reference molecule.
 
         Args:
             reference: The reference molecule as Mol block.
         """
+        edit_state = self.get_edit_state()
+        if edit_state.aligned:
+            raise ValueError("Already aligned")
+        self.set_edit_state(edit_state._replace(aligned=True))
+        self.align_to_reference_callback(reference)
+        return self
 
     @abstractmethod
-    def cleanup(self) -> None:
+    def cleanup_callback(self) -> None:
+        """Run after cleanup checks are done by `cleanup`."""
+
+    @final
+    def cleanup(self) -> Self:
         """Cleanup the molecule using the backend's features."""
+        edit_state = self.get_edit_state()
+        if edit_state.kekulized is not None or edit_state.aligned:
+            raise ValueError("Cleanup after kekulization or alignment not supported")
+        self.cleanup_callback()
+        return self
 
     @abstractmethod
-    def kekulize(self, kekulize: bool) -> None:
+    def kekulize_callback(self, kekulize: bool) -> None:
+        """Run after kekulization checks are done by `kekulize`."""
+
+    @final
+    def kekulize(self, kekulize: bool) -> Self:
         """Kekulize or dekekulize the underlying molecule."""
+        edit_state = self.get_edit_state()
+        if edit_state.kekulized is not None:
+            raise ValueError("Already kekulized")
+        self.set_edit_state(edit_state._replace(kekulized=kekulize))
+        self.kekulize_callback(kekulize)
+        return self
 
     @abstractmethod
-    def set_hydrogen_display_callback(self, show_hydrogens: bool, toggle_all: bool = False) -> None:
+    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
         """Run after hydrogen options are set by `set_hydrogen_display`."""
 
+    @final
+    def set_hydrogen_display(self, show_hydrogens: bool) -> Self:
+        """Show or hide hydrogens."""
+        if self.get_hml():
+            raise ValueError("Setting hydrogen display after highlighting not supported")
+        edit_state = self.get_edit_state()
+        if edit_state.hydrogen_display_set:
+            raise ValueError("Hydrogen display already set")
+        self.set_edit_state(edit_state._replace(hydrogen_display_set=True))
+        self.set_hydrogen_display_callback(show_hydrogens)
+        return self
+
     @abstractmethod
-    def highlight_from_json_callback(
-        self, hml_json: str, show_hydrogens: bool | None, toggle_all: bool = False
-    ) -> None:
+    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
         """Run after highlighting options are set by `highlight_from_json`."""
 
+    @final
+    def highlight_from_json(self, hml_json: str, show_hydrogens: bool | None) -> Self:
+        """Set the underlying highlighting options and run the backend's callback."""
+        if self.get_hml():
+            raise ValueError("Already highlighted")
+        edit_state = self.get_edit_state()
+        if edit_state.hydrogen_display_set:
+            raise ValueError("Highlighting after setting hydrogen display not supported")
+        if show_hydrogens is not None:
+            self.set_edit_state(edit_state._replace(hydrogen_display_set=True))
+        self.set_hml(msgspec.json.Decoder(HML).decode(hml_json))
+        self.highlight_from_json_callback(hml_json, show_hydrogens)
+        return self
+
+    @final
     def to_hmol_json(self) -> str:
         """Return a JSON-encoded of the molecule including its highlighting options."""
         hmol = HMol(mol=self.to_molblock())
-        if self.hml:
-            for field in self.hml.__struct_fields__:
-                setattr(hmol, field, getattr(self.hml, field))
+        if hml := self.get_hml():
+            for field in hml.__struct_fields__:
+                setattr(hmol, field, getattr(hml, field))
         return msgspec.json.encode(hmol).decode()
-
-    def set_hydrogen_display(self, show_hydrogens: bool, toggle_all: bool = False) -> None:
-        """Show or hide hydrogens.
-
-        By default (`toggle_all=False`) only affects featureless and non-highlighted
-        hydrogens, leaving any hydrogen already explicit in the molecule alone.
-        `toggle_all=True` shows/hides every hydrogen unconditionally, including ones already
-        explicit in the molecule.
-        """
-        self.set_hydrogen_display_callback(show_hydrogens, toggle_all)
-
-    def highlight_from_json(
-        self, hml_json: str, show_hydrogens: bool | None, toggle_all: bool = False
-    ) -> None:
-        """Set the underlying highlighting options and run the backend's callback."""
-        self.hml = msgspec.json.Decoder(HML).decode(hml_json)
-        self.highlight_from_json_callback(hml_json, show_hydrogens, toggle_all)

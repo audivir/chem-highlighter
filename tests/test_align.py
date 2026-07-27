@@ -30,14 +30,14 @@ def _mol(smiles: str) -> tuple[Chem.Mol, str]:
     mol = Chem.MolFromSmiles(smiles)
     rdDepictor.SetPreferCoordGen(True)
     rdDepictor.Compute2DCoords(mol)
-    return mol, Chem.MolToMolBlock(mol, forceV3000=True)
+    return mol, Chem.MolToMolBlock(mol, kekulize=False, forceV3000=True)
 
 
 def _3d_mol(smiles: str) -> tuple[Chem.Mol, str]:
     """Like _mol but with 3D coordinates (EmbedMolecule)."""
     mol = Chem.MolFromSmiles(smiles)
     rdDistGeom.EmbedMolecule(mol)
-    return mol, Chem.MolToMolBlock(mol, forceV3000=True)
+    return mol, Chem.MolToMolBlock(mol, kekulize=False, forceV3000=True)
 
 
 def test_get_2d_mol() -> None:

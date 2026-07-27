@@ -10,9 +10,9 @@ from typing_extensions import Self, override
 
 from chem_highlighter.align import get_alignment_flips_and_transform
 from chem_highlighter.backend.map_tokens import map_smiles_tokens
-from chem_highlighter.hml import HML, HighlightBackendDocument
+from chem_highlighter.hml import HML, EditState, HighlightBackendDocument
 from chem_highlighter.modify import apply_transform, flip_bond, parse_transform
-from chem_highlighter.utils import RESET_COLOR, get_ansi_color
+from chem_highlighter.utils import RESET_COLOR, get_ansi_color, get_atoms
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 Drawer: TypeAlias = "Draw.MolDraw2DCairo | Draw.MolDraw2DSVG"
+
+SENTINEL_ISOTOPE = 999
 
 
 def highlight_without_rings(
@@ -133,15 +135,37 @@ class RDKitDocument(HighlightBackendDocument):
         Args:
             mol: The RDKit molecule to wrap.
         """
+        from rdkit import Chem
         from rdkit.Chem import rdDepictor
 
-        self.mol = mol
-        self.hml: HML | None = None
+        self.mol = Chem.Mol(mol)
+        self._hml: HML | None = None
         if not self.mol.GetNumConformers():
             rdDepictor.SetPreferCoordGen(True)
             rdDepictor.Compute2DCoords(self.mol)
-        self._aligned = False
-        self._kekulized = False
+        self._edit_state = EditState(
+            None, False, False
+        )  # RDKit automatically dekekulize on parsing
+
+    @override
+    def get_edit_state(self) -> EditState:
+        """Get the edit state tuple."""
+        return self._edit_state
+
+    @override
+    def set_edit_state(self, edit_state: EditState) -> None:
+        """Set the edit state."""
+        self._edit_state = edit_state
+
+    @override
+    def get_hml(self) -> HML | None:
+        """Get the HML object."""
+        return self._hml
+
+    @override
+    def set_hml(self, hml: HML) -> None:
+        """Set the HML object."""
+        self._hml = hml
 
     @classmethod
     def convert_molblock(cls, molblock: str) -> Chem.Mol:
@@ -175,34 +199,26 @@ class RDKitDocument(HighlightBackendDocument):
         """Return the underlying molecule as Mol block."""
         from rdkit import Chem
 
-        # `Chem.MolToMolBlock` defaults to `kekulize=True` unconditionally ("as suggested by the
-        # MDL spec"), which would silently ignore `kekulize(False)` -- the exported file would
-        # always come out kekulized regardless of `self._kekulized`. Pass it through explicitly
-        # so dekekulize() actually has an effect on the exported Mol block, not just the
-        # in-memory RDKit bond objects.
-        return Chem.MolToMolBlock(self.mol, forceV3000=True, kekulize=self._kekulized)
+        return Chem.MolToMolBlock(
+            self.mol, kekulize=self.get_edit_state().kekulized or False, forceV3000=True
+        )
 
     @override
     def to_svg(self) -> str:
         """Return a highlighted (if set) SVG visualization of the molecule."""
-        return draw_mol(self.hml, self.mol, "svg").decode()
+        return draw_mol(self.get_hml(), self.mol, "svg").decode()
 
     @override
     def to_png(self) -> bytes:
         """Return a highlighted (if set) PNG visualization of the molecule."""
-        return draw_mol(self.hml, self.mol, "png")
+        return draw_mol(self.get_hml(), self.mol, "png")
 
     @override
-    def align_to_reference(self, reference: str) -> None:
-        """Align the underlying molecule to a reference molecule.
-
-        Args:
-            reference: The reference molecule as Mol block.
-        """
+    def align_to_reference_callback(self, reference: str) -> None:
+        """Align the underlying molecule to a reference molecule."""
         from rdkit import Chem
 
         atol = 1e-5
-        self._aligned = True
         query = self.mol
         reference_mol = Chem.MolFromMolBlock(reference)
         flips, transform = get_alignment_flips_and_transform(query, reference_mol, atol=atol)
@@ -213,58 +229,55 @@ class RDKitDocument(HighlightBackendDocument):
         self.mol = query
 
     @override
-    def cleanup(self) -> None:
+    def cleanup_callback(self) -> None:
         """Sanitize the molecule and recalculate its 2D coordinates."""
         from rdkit import Chem
         from rdkit.Chem.rdDepictor import Compute2DCoords
         from rdkit.Chem.rdmolops import SanitizeMol
 
-        if self._kekulized:
-            logger.warning("Running Cleanup after Kekulization is broken for RDKit backend")
-        if self._aligned:
-            logger.warning("Running Cleanup after Alignment might change orientation")
         SanitizeMol(self.mol, Chem.SANITIZE_ALL)
         Compute2DCoords(self.mol, clearConfs=True)
 
     @override
-    def kekulize(self, kekulize: bool) -> None:
+    def kekulize_callback(self, kekulize: bool) -> None:
         """Kekulize or dekekulize the underlying molecule."""
         from rdkit import Chem
         from rdkit.Chem.rdmolops import SanitizeMol
 
-        self._kekulized = kekulize
         if kekulize:
             Chem.Kekulize(self.mol)
         else:
             SanitizeMol(self.mol, Chem.SANITIZE_SETAROMATICITY)
 
     @override
-    def set_hydrogen_display_callback(self, show_hydrogens: bool, toggle_all: bool = False) -> None:
-        """Show or hide hydrogens.
-
-        `toggle_all=False` (default): only affects featureless hydrogens (no isotope, charge,
-        stereo relevance, etc.) -- `Chem.RemoveHs`'s own default semantics, regardless of
-        whether a given hydrogen was already explicit in the molecule or not. `toggle_all=True`
-        removes every hydrogen unconditionally via `Chem.RemoveAllHs`.
-        """
+    def set_hydrogen_display_callback(self, show_hydrogens: bool) -> None:
+        """Show or hide hydrogens on carbon atoms."""
         from rdkit import Chem
 
         if show_hydrogens:
-            self.mol = Chem.AddHs(self.mol)
-        elif toggle_all:
-            self.mol = Chem.RemoveAllHs(self.mol)
+            atoms = self.mol.GetAtoms()  # type: ignore[no-untyped-call]
+            carbon_ixs = [atom.GetIdx() for atom in atoms if atom.GetSymbol() == "C"]
+            self.mol = Chem.AddHs(self.mol, onlyOnAtoms=carbon_ixs, addCoords=True)
         else:
-            rhps = Chem.RemoveHsParameters()
-            rhps.removeMapped = False  # type: ignore[assignment]
-            self.mol = Chem.RemoveHs(self.mol, rhps)
+            mol = Chem.Mol(self.mol)
+            hml = self.get_hml()
+            if hml:
+                for ix in hml.highlighted_atoms:
+                    atom = mol.GetAtomWithIdx(ix)
+                    if atom.GetSymbol() == "H" and atom.GetIsotope() == 0: # pragma: no branch
+                        atom.SetIsotope(SENTINEL_ISOTOPE)
+
+            mol = Chem.RemoveHs(mol)
+
+            for atom in get_atoms(mol):
+                if atom.GetSymbol() == "H" and atom.GetIsotope() == SENTINEL_ISOTOPE:
+                    atom.SetIsotope(0)
+
+            self.mol = mol
 
     @override
-    def highlight_from_json_callback(
-        self, hml_json: str, show_hydrogens: bool | None, toggle_all: bool = False
-    ) -> None:
+    def highlight_from_json_callback(self, hml_json: str, show_hydrogens: bool | None) -> None:
         """Do nothing as highlighting occurs during visualization only."""
-        if show_hydrogens is not None:
-            self.set_hydrogen_display(show_hydrogens, toggle_all)
 
     @override
     def to_console(self, canonical: bool = True) -> str:
@@ -283,9 +296,10 @@ class RDKitDocument(HighlightBackendDocument):
 
         char_maps = map_smiles_tokens(smiles, self.mol)
 
-        hl_atoms = self.hml.highlighted_atoms if self.hml else {}
-        hl_bonds = self.hml.highlighted_bonds if self.hml else {}
-        palette = self.hml.palette if self.hml else []
+        hml = self.get_hml()
+        hl_atoms = hml.highlighted_atoms if hml else {}
+        hl_bonds = hml.highlighted_bonds if hml else {}
+        palette = hml.palette if hml else []
 
         current_color: int | None = None
         chars_out: list[str] = []

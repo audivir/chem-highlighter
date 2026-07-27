@@ -65,7 +65,7 @@ def test_mol_from_smiles_invalid_raises(invalid_smiles: str) -> None:
         mol_from_smiles(invalid_smiles)
 
 
-@pytest.mark.parametrize("smiles", ["CCO", "CCC", "c1ccccc1", "CC(=O)O"])
+@pytest.mark.parametrize("smiles", ["CCO", "CCC", "C1=CC=CC=C1", "c1ccccc1", "CC(=O)O"])
 def test_mol_to_smiles(smiles: str) -> None:
     # Converting to mol and back must give an equivalent molecule.
     mol = mol_from_smiles(smiles)

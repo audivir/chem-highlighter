@@ -25,6 +25,21 @@ def assert_mols_equal(result: Chem.Mol | str, expected: Chem.Mol | str) -> None:
     )
 
 
+def extract_bond_codes(molblock: str) -> list[int]:
+    """Extract the bond type codes from a V3000 molblock."""
+    codes = []
+    in_bond_block = False
+    for line in molblock.splitlines():
+        stripped = line.strip()
+        if stripped == "M  V30 BEGIN BOND":
+            in_bond_block = True
+        elif stripped == "M  V30 END BOND":
+            in_bond_block = False
+        elif in_bond_block:
+            codes.append(int(line.split()[3]))
+    return codes
+
+
 def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
     import tempfile
     import webbrowser
