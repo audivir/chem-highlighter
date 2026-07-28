@@ -127,9 +127,9 @@ class HighlightBackendDocument(ABC):
         """Export the document to the specified format as bytes."""
 
     @final
-    def export_string(self, fmt: OutputFormat) -> str:
+    def export_string(self, fmt: OutputFormat, use_v2000: bool = False) -> str:
         """Export the document to the specified format as a string."""
-        return self.export(fmt).decode()
+        return self.export(fmt, use_v2000).decode()
 
     @abstractmethod
     def align_to_reference_callback(

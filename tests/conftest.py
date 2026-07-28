@@ -30,11 +30,22 @@ def from_fixture_molblock(fixture_file: str) -> Chem.Mol:
     return Chem.MolFromMolBlock((FIXTURES / fixture_file).read_text(), removeHs=False)
 
 
+def read_fixture(fixture_file: str) -> str:
+    return (FIXTURES / fixture_file).read_text()
+
+
+def mol_from_explicit_smiles(smiles: str) -> Chem.Mol:
+    """Parse a SMILES string without collapsing its explicit hydrogen atoms to implicit ones."""
+    params = Chem.SmilesParserParams()
+    params.removeHs = False  # type: ignore[assignment]
+    return Chem.MolFromSmiles(smiles, params)
+
+
 def assert_mols_equal(result: Chem.Mol | str, expected: Chem.Mol | str) -> None:
     if isinstance(result, str):
-        result = mol_from_smiles(result)
+        result = mol_from_explicit_smiles(result)
     if isinstance(expected, str):
-        expected = mol_from_smiles(expected)
+        expected = mol_from_explicit_smiles(expected)
     assert Chem.MolToSmiles(result) == Chem.MolToSmiles(expected), (
         f"{Chem.MolToSmiles(result)} != {Chem.MolToSmiles(expected)}"
     )
@@ -53,6 +64,24 @@ def extract_bond_codes(molblock: str) -> list[int]:
         elif in_bond_block:
             codes.append(int(line.split()[3]))
     return codes
+
+
+def assert_benzene_kekulized(doc: HighlightBackendDocument, kekulized: bool) -> None:
+    assert doc.get_edit_state() == (kekulized, False, False)
+
+    bond_type_codes = extract_bond_codes(doc.to_molblock())
+    kekule_bonds = [[1 if i % 2 == modulo else 2 for i in range(6)] for modulo in (0, 1)]
+
+    if mol := getattr(doc, "mol", None):  # noqa: SIM102
+        if isinstance(mol, Chem.Mol):
+            ring_bonds = [mol.GetBondBetweenAtoms(i, (i + 1) % 6) for i in range(6)]
+            assert all(bond.GetIsAromatic() for bond in ring_bonds)
+
+    if kekulized:
+        assert bond_type_codes in kekule_bonds, "exported Mol block still has aromatic bond codes"
+
+    else:
+        assert bond_type_codes == [4] * 6, "exported Mol block should use the aromatic bond code"
 
 
 def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:

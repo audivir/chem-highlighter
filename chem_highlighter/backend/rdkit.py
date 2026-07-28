@@ -151,7 +151,7 @@ class RDKitDocument(HighlightBackendDocument):
         if not self.mol.GetNumConformers():
             rdDepictor.SetPreferCoordGen(True)
             rdDepictor.Compute2DCoords(self.mol)
-        Chem.Kekulize(mol)
+        Chem.Kekulize(self.mol)
         self._edit_state = True, False, False
 
     @override
@@ -173,11 +173,6 @@ class RDKitDocument(HighlightBackendDocument):
     def set_hml_json(self, hml_json: str) -> None:
         """Set the JSON-encoded HML object."""
         self._hml_json = hml_json
-
-    @classmethod
-    def convert_molblock(cls, molblock: str) -> Chem.Mol:
-        """Convert a molecule as molblock to a RDKit molecule."""
-        return cls.from_molblock(molblock).mol
 
     @override
     @classmethod
@@ -208,8 +203,8 @@ class RDKitDocument(HighlightBackendDocument):
             mol = inchi_mol
         else:
             # RXN, CDX
-            raise InputFormatNotSupported(f"{cls} does not support importing from {fmt}")
-        if not mol:
+            raise InputFormatNotSupported(f"{cls.__name__} does not support importing from {fmt}")
+        if not mol or mol.GetNumAtoms() < 1:
             raise ValueError(f"Invalid {fmt} input")
         return cls(mol)
 
@@ -235,7 +230,7 @@ class RDKitDocument(HighlightBackendDocument):
         if fmt == "SMILES":
             return Chem.MolToSmiles(self.mol, kekuleSmiles=kekulized, canonical=False).encode()
         if fmt == "InChI":
-            return Chem.MolToInchi(self.mol)[0].encode()  # type: ignore[no-any-return,no-untyped-call]
+            return Chem.MolToInchi(self.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
         if fmt == "InChIKey":
             return Chem.MolToInchiKey(self.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
         if fmt == "SVG":
@@ -243,7 +238,7 @@ class RDKitDocument(HighlightBackendDocument):
         if fmt == "PNG":
             return draw_mol(hml, self.mol, "png")
         # RXN, CDX, CDXML, EPS
-        raise OutputFormatNotSupported(f"{type(self)} does not support exporting to {fmt}")
+        raise OutputFormatNotSupported(f"{type(self).__name__} does not support exporting to {fmt}")
 
     @override
     def align_to_reference_callback(
@@ -277,6 +272,8 @@ class RDKitDocument(HighlightBackendDocument):
             Chem.Kekulize(self.mol)
         else:
             SanitizeMol(self.mol, Chem.SANITIZE_SETAROMATICITY)
+        _, aligned, hydrogens_hidden = self.get_edit_state()
+        self.set_edit_state(kekulize, aligned, hydrogens_hidden)
 
     @override
     def hide_hydrogens_callback(self) -> None:
