@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from conftest import assert_mols_equal
 from matplotlib.figure import Figure
 from rdkit import Chem
+from utils import assert_mols_equal
 
 from chem_highlighter.backend.rdkit import RDKitDocument
 from chem_highlighter.decomposer.core import Core, DecomposedMol

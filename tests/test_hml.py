@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import msgspec
 import pytest
-from conftest import assert_benzene_kekulized
+from utils import assert_benzene_kekulized
 
 from chem_highlighter.align import get_alignment_ops_from_molblock
 from chem_highlighter.backend.rdkit import RDKitDocument

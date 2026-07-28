@@ -10,7 +10,7 @@ import msgspec
 from typing_extensions import Self, TypeVar
 
 from chem_highlighter.align import get_alignment_ops_from_molblock
-from chem_highlighter.utils import is_same_conformer
+from chem_highlighter.utils import get_high_precision_v3000, is_same_conformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -228,9 +228,7 @@ class HighlightBackendDocument(ABC):
     @classmethod
     def from_mol(cls, mol: Chem.Mol) -> Self:
         """Create a document from a provided molecule as RDkit molecule."""
-        from rdkit import Chem
-
-        return cls.from_molblock(Chem.MolToMolBlock(mol, forceV3000=True))
+        return cls.from_molblock(get_high_precision_v3000(mol))
 
     @final
     @classmethod

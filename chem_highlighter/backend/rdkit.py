@@ -20,7 +20,7 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.modify import apply_transform, flip_bond
-from chem_highlighter.utils import RESET_COLOR, get_ansi_color, get_atoms
+from chem_highlighter.utils import RESET_COLOR, get_ansi_color, get_atoms, get_high_precision_v3000
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -130,7 +130,7 @@ def draw_mol(
         svg = get_rdkit_svg(drawer)
         tree = fix_svg(svg)
         # svg = add_legend(svg, legend, line_breaks=False) # noqa: ERA001
-        return to_string(tree).encode()  # type: ignore[no-any-return]
+        return to_string(tree).encode()  # type: ignore[no-any-return,unused-ignore]
     return drawer.GetDrawingText()  # type: ignore[return-value]
 
 
@@ -226,9 +226,9 @@ class RDKitDocument(HighlightBackendDocument):
                 sdw.write(self.mol)
             return buffer.getvalue().encode()
         if fmt == "Mol":
-            return Chem.MolToMolBlock(
-                self.mol, kekulize=kekulized, forceV3000=not use_v2000
-            ).encode()
+            if use_v2000:
+                return Chem.MolToMolBlock(self.mol, kekulize=kekulized).encode()
+            return get_high_precision_v3000(self.mol, kekulize=kekulized).encode()
         if fmt == "SMILES":
             return Chem.MolToSmiles(self.mol, kekuleSmiles=kekulized, canonical=False).encode()
         if fmt == "InChI":

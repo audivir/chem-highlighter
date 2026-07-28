@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-from conftest import from_fixture_molblock
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdDistGeom
+from utils import from_fixture_molblock
 
 from chem_highlighter.align import (
     find_mcs,

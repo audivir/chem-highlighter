@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, NamedTuple, TypeAlias
 
 if TYPE_CHECKING:
@@ -88,6 +89,48 @@ def add_hydrogens(data: Sequence[str | Chem.Mol]) -> list[Chem.Mol]:
     from rdkit import Chem
 
     return [Chem.AddHs(get_smiles_mol_pair(d).mol, addCoords=True) for d in data]
+
+
+def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
+    """Get an unrounded V3000 molblock."""
+    from rdkit import Chem
+
+    mol_block = Chem.MolToMolBlock(mol, kekulize=kekulize, forceV3000=True)
+
+    if mol.GetNumConformers() == 0:
+        return mol_block
+
+    conf = mol.GetConformer()
+    lines = mol_block.split("\n")
+
+    in_atom_block = False
+    atom_idx = 0
+
+    for i, line in enumerate(lines):
+        if line.startswith("M  V30 BEGIN ATOM"):
+            in_atom_block = True
+            continue
+        if line.startswith("M  V30 END ATOM"):
+            in_atom_block = False
+            continue
+
+        if in_atom_block and line.startswith("M  V30 "):
+            pos = conf.GetAtomPosition(atom_idx)
+
+            # M  V30 [idx] [element] [x] [y] [z] [aamap] ...
+            parts = re.split(r"(\s+)", line)
+
+            # Replace the rounded X, Y, Z (indices 4, 5, 6 in the split)
+            # with 8-decimal precision floats
+            parts[8] = f"{pos.x:.8f}"
+            parts[10] = f"{pos.y:.8f}"
+            parts[12] = f"{pos.z:.8f}"
+
+            # Reconstruct the line
+            lines[i] = "".join(parts)
+            atom_idx += 1
+
+    return "\n".join(lines)
 
 
 def is_same_conformer(  # noqa: C901,PLR0912

@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pytest
-from conftest import assert_mols_equal, from_fixture_molblock
 from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from rdkit.Chem.Draw import rdDepictor
 from rdkit.Geometry import Point3D
+from utils import FIXTURES, assert_mols_equal, from_fixture_molblock
 
 from chem_highlighter.utils import (
     add_hydrogens,
@@ -22,6 +22,7 @@ from chem_highlighter.utils import (
     get_atom_position,
     get_atoms,
     get_bonds,
+    get_high_precision_v3000,
     get_mol_center,
     get_neighbors,
     get_smiles_mol_pair,
@@ -135,6 +136,31 @@ def test_add_hydrogens() -> None:
     [with_hs] = add_hydrogens([mol])
     assert with_hs.GetNumAtoms() > heavy_count
     assert any(a.GetSymbol() == "H" for a in get_atoms(with_hs))
+
+
+def get_conf_position_mae(mol: Chem.Mol, molblock: str) -> float:
+    new_mol = Chem.MolFromMolBlock(molblock, removeHs=False)
+    mol_pos = mol.GetConformer().GetPositions()
+    new_pos = new_mol.GetConformer().GetPositions()
+    return float(np.mean(np.abs(new_pos - mol_pos)))
+
+
+@pytest.mark.parametrize(("mode", "prec"), [("v2000", 1e-4), ("v3000", None), ("hp_v3000", None)])
+@pytest.mark.parametrize("q_file", list(FIXTURES.glob("*.mol")))
+def test_get_high_precision_v3000(
+    mode: Literal["v2000", "v3000", "hp_v3000"], prec: float | None, q_file: str
+) -> None:
+    mol = from_fixture_molblock(q_file)
+    molblock = (
+        get_high_precision_v3000(mol)
+        if mode == "hp_v3000"
+        else Chem.MolToMolBlock(mol, forceV3000=mode == "v3000")
+    )
+    mse = get_conf_position_mae(mol, molblock)
+    if prec is None:
+        assert mse == 0.0
+    else:
+        assert mse <= prec
 
 
 def test_is_same_conformer() -> None:

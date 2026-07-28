@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from conftest import assert_mols_equal
 from rdkit import Chem
+from utils import assert_mols_equal
 
 from chem_highlighter.decomposer.core import (
     Core,

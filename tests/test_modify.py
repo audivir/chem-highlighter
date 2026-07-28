@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pytest
-from conftest import from_fixture_molblock
 from rdkit import Chem
 from rdkit.Chem.rdDepictor import Compute2DCoords
 from rdkit.Chem.rdmolops import Kekulize
 from rdkit.Chem.rdMolTransforms import TransformConformer
+from utils import from_fixture_molblock, visualize_conformers
 
 from chem_highlighter.modify import apply_transform, flip_bond, make_transform, parse_transform
 from chem_highlighter.utils import get_mol_center, is_same_conformer, move_molecule
@@ -551,7 +551,6 @@ def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) 
     assert not is_same_conformer(q_orig, r, atol=atol)
 
     q = flip_bond(q_orig, bond_ix, anchor_atom_ix, atol=atol)
-    from conftest import visualize_conformers
 
     assert is_same_conformer(q, r, atol=atol), visualize_conformers(q, q_orig)
 
