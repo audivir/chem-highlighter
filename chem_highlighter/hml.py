@@ -143,11 +143,11 @@ class HighlightBackendDocument(ABC):
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
             raise ValueError("Already aligned")
-        self.set_edit_state(kekulized, True, hydrogens_hidden)
         flips, global_flip, angle = get_alignment_ops_from_molblock(
             self.to_molblock(), reference, atol=1e-5
         )
         self.align_to_reference_callback(flips, global_flip, angle)
+        self.set_edit_state(kekulized, True, hydrogens_hidden)
         return self
 
     @abstractmethod
@@ -186,8 +186,8 @@ class HighlightBackendDocument(ABC):
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if hydrogens_hidden:
             raise ValueError("Hydrogen display already set")
-        self.set_edit_state(kekulized, aligned, True)
         self.hide_hydrogens_callback()
+        self.set_edit_state(kekulized, aligned, True)
         return self
 
     @abstractmethod
@@ -202,9 +202,9 @@ class HighlightBackendDocument(ABC):
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if hydrogens_hidden:
             raise ValueError("Highlighting after setting hydrogen display not supported")
-        self.set_edit_state(kekulized, aligned, hide_hydrogens)
-        self.set_hml_json(hml_json)
         self.highlight_from_json_callback(hml_json, hide_hydrogens)
+        self.set_hml_json(hml_json)
+        self.set_edit_state(kekulized, aligned, hide_hydrogens)
         return self
 
     @final
