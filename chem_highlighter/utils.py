@@ -90,10 +90,11 @@ def add_hydrogens(data: Sequence[str | Chem.Mol]) -> list[Chem.Mol]:
     return [Chem.AddHs(get_smiles_mol_pair(d).mol, addCoords=True) for d in data]
 
 
-def is_same_conformer(  # noqa: C901,PLR0911
+def is_same_conformer(  # noqa: C901,PLR0912
     mol_or_molblock_a: Chem.Mol | str,
     mol_or_molblock_b: Chem.Mol | str,
     atol: float,
+    quiet: bool = False,
 ) -> bool:
     """Are two molblocks the same conformer."""
     import numpy as np
@@ -116,15 +117,15 @@ def is_same_conformer(  # noqa: C901,PLR0911
         raise ValueError("Invalid molblocks")
 
     if Chem.MolToSmiles(mol_a) != Chem.MolToSmiles(mol_b):
-        logger.error("Non-identical molecules")
-        return False
+        raise ValueError("Non-identical molecules")
 
     # Basic topology. Unreachable in practice: identical canonical SMILES already
     # implies identical atom/bond counts, but this stays as a defensive guard.
     if (
         mol_a.GetNumAtoms() != mol_b.GetNumAtoms() or mol_a.GetNumBonds() != mol_b.GetNumBonds()
     ):  # pragma: no cover
-        logger.error("Non-identical number of atoms or bonds")
+        if not quiet:
+            logger.error("Non-identical number of atoms or bonds")
         return False
 
     conf_a = mol_a.GetConformer()
@@ -153,7 +154,8 @@ def is_same_conformer(  # noqa: C901,PLR0911
 
     max_dist = max(cost_matrix[rows, cols])
     if max_dist >= atol:
-        logger.error("Positions off by %f", max_dist)
+        if not quiet:
+            logger.error("Positions off by %f", max_dist)
         return False
 
     # Unreachable in practice: the 1e7 mismatch penalty above means the optimal
@@ -164,7 +166,8 @@ def is_same_conformer(  # noqa: C901,PLR0911
         atom_b = mol_b.GetAtomWithIdx(exp_idx)
 
         if not are_atoms_equal(atom_a, atom_b):  # pragma: no cover
-            logger.error("Non-identical atom data")
+            if not quiet:
+                logger.error("Non-identical atom data")
             return False
 
     for bond in get_bonds(mol_b):
@@ -175,11 +178,13 @@ def is_same_conformer(  # noqa: C901,PLR0911
         # guarantees a graph-isomorphic mapping exists between mol_a and mol_b.
         other: Chem.Bond | None = mol_a.GetBondBetweenAtoms(a1, a2)
         if not other:  # pragma: no cover
-            logger.error("No bond found")
+            if not quiet:
+                logger.error("No bond found")
             return False
 
         if not are_bonds_equal(bond, other):
-            logger.error("Non-identical bond data")
+            if not quiet:
+                logger.error("Non-identical bond data")
             return False
 
     return True

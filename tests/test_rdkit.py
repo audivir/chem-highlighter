@@ -78,7 +78,8 @@ def test_align_to_reference(r_file: str, q_file_suffixes: Sequence[str]) -> None
 
 
 def test_cleanup() -> None:
-    assert_cleanup(RDKitDocument)
+    doc = RDKitDocument.from_string("c1cnccc1", "SMILES")
+    assert_cleanup(doc.to_molblock(), RDKitDocument)
 
 
 def test_kekulize() -> None:

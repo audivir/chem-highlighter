@@ -197,7 +197,9 @@ class RDKitDocument(HighlightBackendDocument):
             else:
                 mol = mols[0]
         elif fmt == "SMILES":
-            mol = Chem.MolFromSmiles(data.decode())
+            params = Chem.SmilesParserParams()
+            params.removeHs = False  # type: ignore[assignment]
+            mol = Chem.MolFromSmiles(data.decode(), params)
         elif fmt == "InChI":
             inchi_mol: Chem.Mol | None = Chem.MolFromInchi(data.decode(), removeHs=False)  # type: ignore[no-untyped-call]
             mol = inchi_mol
@@ -272,8 +274,6 @@ class RDKitDocument(HighlightBackendDocument):
             Chem.Kekulize(self.mol)
         else:
             SanitizeMol(self.mol, Chem.SANITIZE_SETAROMATICITY)
-        _, aligned, hydrogens_hidden = self.get_edit_state()
-        self.set_edit_state(kekulize, aligned, hydrogens_hidden)
 
     @override
     def hide_hydrogens_callback(self) -> None:
@@ -298,8 +298,10 @@ class RDKitDocument(HighlightBackendDocument):
         self.mol = mol
 
     @override
-    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool | None) -> None:
+    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool = False) -> None:
         """Do nothing as highlighting occurs during visualization only."""
+        if hide_hydrogens:
+            self.hide_hydrogens_callback()
 
     @override
     def to_console(self, canonical: bool = True) -> str:

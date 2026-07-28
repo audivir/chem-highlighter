@@ -151,7 +151,8 @@ def test_is_same_conformer() -> None:
     rdDepictor.Compute2DCoords(propanol)
     assert is_same_conformer(propanol, Chem.Mol(propanol), atol=atol)
 
-    assert not is_same_conformer(ethanol, propanol, atol=atol)
+    with pytest.raises(ValueError, match="Non-identical molecules"):
+        is_same_conformer(ethanol, propanol, atol=atol)
 
 
 def test_is_conformer_positions() -> None:

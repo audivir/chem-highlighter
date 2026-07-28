@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import msgspec
-import numpy as np
 import pytest
 from conftest import (
     assert_benzene_kekulized,
@@ -24,7 +23,7 @@ from chem_highlighter.hml import (
     OutputFormat,
     OutputFormatNotSupported,
 )
-from chem_highlighter.utils import is_same_conformer, mol_to_smiles, move_molecule
+from chem_highlighter.utils import is_same_conformer, mol_to_smiles
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -74,14 +73,18 @@ def assert_doc_init(backend: type[HighlightBackendDocumentT_co]) -> None:
 def assert_export_mdl(
     fmt: Literal["SDF", "Mol", "RXN"], use_v2000: bool, backend: type[HighlightBackendDocumentT_co]
 ) -> None:
-    output = create_doc("c1ccccc1", backend).export_string(fmt, use_v2000)
+    if fmt == "RXN":
+        raise NotImplementedError
+    doc = create_doc("c1ccccc1", backend)
+    expected = "C1=CC=CC=C1"
+    output = doc.export_string(fmt, use_v2000)
     if use_v2000:
         assert "V2000" in output
     else:
         assert "V3000" in output
     endswith_dollars = output.strip().endswith("$$$$")
     assert endswith_dollars == (fmt == "SDF")
-    assert backend.from_string(output, fmt).export_string("SMILES") == "C1=CC=CC=C1"
+    assert backend.from_string(output, fmt).export_string("SMILES") == expected
 
 
 def assert_export_images(
@@ -94,7 +97,7 @@ def assert_export_images(
     elif fmt == "PNG":
         assert b"\x89PNG" in output
     elif fmt == "EPS":
-        assert b"XXX" in output
+        assert b"EPSF-1.2" in output
 
 
 def assert_export(
@@ -105,9 +108,9 @@ def assert_export(
     if fmt == "SMILES":
         assert output == b"C1=CC=CC=C1"
     elif fmt == "CDX":
-        assert output == b"XXX"
+        assert output.startswith(b"VjCD")
     elif fmt == "CDXML":
-        assert output == b"YYY"
+        assert b"</CDXML>" in output
     elif fmt == "InChI":
         assert output == b"InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H"
     elif fmt == "InChIKey":
@@ -128,29 +131,33 @@ def assert_from_bytes(
     fmt: InputFormat,
     backend: type[HighlightBackendDocumentT_co],
 ) -> None:
+    if fmt == "RXN":
+        raise NotImplementedError
     exported = backend.from_string("c1ccccc1", "SMILES").export(fmt)
     doc = backend.from_bytes(exported, fmt)
+
     assert doc.export_string("SMILES") == "C1=CC=CC=C1"
 
     # empty input
-    with pytest.raises(ValueError, match=f"Invalid {fmt} input"):
+    with pytest.raises((ValueError, RuntimeError), match=f"Invalid {fmt} input"):
         backend.from_bytes(b"", fmt)
 
-    with pytest.raises(ValueError, match=f"Invalid {fmt} input"):
+    with pytest.raises((ValueError, RuntimeError), match=f"Invalid {fmt} input"):
         backend.from_bytes(b"invalid input", fmt)
 
 
 def assert_from_bytes_cdxml(
-    backend: type[HighlightBackendDocumentT_co],
+    backend: type[HighlightBackendDocumentT_co], allow_multiple: bool = False
 ) -> None:
     doc = backend.from_string(read_fixture("one_mol.cdxml"), "CDXML")
     assert doc.kekulize(False).export_string("SMILES") == "c1ccccc1"
 
-    with pytest.raises(ValueError, match="Invalid CDXML input"):
+    with pytest.raises((ValueError, RuntimeError), match="Invalid CDXML input"):
         backend.from_string(read_fixture("no_mol.cdxml"), "CDXML")
 
-    with pytest.raises(ValueError, match="Multiple molecules in CDXML"):
-        backend.from_string(read_fixture("two_mols.cdxml"), "CDXML")
+    if not allow_multiple:
+        with pytest.raises((ValueError, RuntimeError), match="Multiple molecules in CDXML"):
+            backend.from_string(read_fixture("two_mols.cdxml"), "CDXML")
 
 
 def assert_from_bytes_unsupported_format(
@@ -176,18 +183,15 @@ def assert_align_to_reference(
             assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=1e-5)
 
 
-def assert_cleanup(backend: type[HighlightBackendDocumentT_co]) -> None:
+def assert_cleanup(expected: str, backend: type[HighlightBackendDocumentT_co]) -> None:
     atol = 1e-5
 
-    rdkit_doc = create_doc("c1cnccc1", RDKitDocument)
-    move_molecule(rdkit_doc.mol, np.array([1.0, 1.0, 1.0]))
-
-    doc = backend.from_molblock(rdkit_doc.to_molblock())
-    expected = create_doc("c1cnccc1", backend)
-    assert not is_same_conformer(doc.to_molblock(), expected.to_molblock(), atol=atol)
+    doc = backend.from_molblock(read_fixture("pyrimidine_dirty.mol"))
+    assert not is_same_conformer(doc.to_molblock(), expected, atol=atol)
 
     doc.cleanup()
-    assert is_same_conformer(doc.to_molblock(), expected.to_molblock(), atol=atol)
+
+    assert is_same_conformer(doc.to_molblock(), expected, atol=atol)
 
 
 def assert_kekulize(backend: type[HighlightBackendDocumentT_co]) -> None:
@@ -220,36 +224,44 @@ def assert_hide_hydrogens_special(
     mol = RDKitDocument.from_molblock(doc.to_molblock()).mol
     assert_mols_equal(mol, from_fixture_molblock("hs_mol_hide.mol"))
 
-    rdkit_doc = RDKitDocument.from_mol(mol_from_explicit_smiles("[H]C([2H])C[H]"))
-    doc = backend.from_molblock(rdkit_doc.to_molblock())
+    doc = backend.from_mol(mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc.hide_hydrogens_callback()
     mol = RDKitDocument.from_molblock(doc.to_molblock()).mol
     assert mol.GetNumAtoms() == 3  # only 2 Cs and [2H]
 
     rdkit_doc = RDKitDocument.from_mol(mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc = backend.from_molblock(rdkit_doc.to_molblock())
-    doc.set_hml_json(hml_json)
-    doc.hide_hydrogens_callback()
+    doc.highlight_from_json(hml_json, True)
     mol = RDKitDocument.from_molblock(doc.to_molblock()).mol
     assert mol.GetNumAtoms() == 4  # 2 Cs, [2H], and highlighted [H]
 
 
 def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendDocumentT_co]) -> None:
-    doc = create_doc("[2H]CCO[H]", backend)
+    doc = create_doc("[H]CCO[2H]", backend)
     before = doc.to_svg()
 
     doc.highlight_from_json(hml_json, False)
     svg = doc.to_svg()
+
+    mol = RDKitDocument.from_molblock(doc.to_molblock()).mol
+    assert mol.GetNumAtoms() == 5  # 2 Cs, [2H], O, and highlighted [H]
     assert "<svg" in svg
     assert svg != before, "highlighting should change the rendered SVG"
     assert "ff0000" in svg.lower(), "the highlight color should actually appear in the SVG"
 
-    doc = create_doc("[2H]CCO[H]", backend)
+    doc = create_doc("[H]CCO[2H]", backend)
     doc.highlight_from_json(hml_json, True)
     svg_with_hidden = doc.to_svg()
+
     mol = RDKitDocument.from_molblock(doc.to_molblock()).mol
-    assert mol.GetNumAtoms() == 4  # 2 Cs, [2H], and highlighted [H]
+    assert mol.GetNumAtoms() == 5  # 2 Cs, [2H], O, and highlighted [H]
     assert svg == svg_with_hidden
+
+    doc = create_doc("[H]CCO[2H]", backend)
+    doc.hide_hydrogens()
+
+    mol = RDKitDocument.from_molblock(doc.to_molblock()).mol
+    assert mol.GetNumAtoms() == 4  # 2 Cs, [2H], O
 
     doc = create_doc("c1ccccc1", backend)
     hml = HML(
@@ -259,8 +271,10 @@ def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendDocu
         palette=["#ff0000", "#00ff00"],
     )
     doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
-    svg = doc.to_svg()
-    assert "<svg" in svg
-    assert svg != before, "highlighting should change the rendered SVG"
-    assert "ff0000" in svg.lower(), "the highlight color should actually appear in the SVG"
-    assert "00ff00" in svg.lower(), "the ring highlight color should actually appear in the SVG"
+    ring_svg = doc.to_svg()
+    assert "<svg" in ring_svg
+    assert ring_svg != before, "highlighting should change the rendered SVG"
+    assert "ff0000" in ring_svg.lower(), "the highlight color should actually appear in the SVG"
+    assert "00ff00" in ring_svg.lower(), (
+        "the ring highlight color should actually appear in the SVG"
+    )

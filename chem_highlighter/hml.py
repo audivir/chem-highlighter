@@ -10,6 +10,7 @@ import msgspec
 from typing_extensions import Self, TypeVar
 
 from chem_highlighter.align import get_alignment_ops_from_molblock
+from chem_highlighter.utils import is_same_conformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from chem_highlighter.backend.rdkit import RDKitDocument
     from chem_highlighter.utils import RGBA
 
+MAX_CLEANUPS = 100
 
 HighlightBackendDocumentT_co = TypeVar(
     "HighlightBackendDocumentT_co",
@@ -160,7 +162,20 @@ class HighlightBackendDocument(ABC):
         kekulized, aligned, _ = self.get_edit_state()
         if aligned:
             raise ValueError("Cleanup after alignment not supported")
-        self.cleanup_callback()
+
+        prev_cleans: list[str] = [self.to_molblock()]  # if already clean
+        for _ in range(MAX_CLEANUPS):
+            self.cleanup_callback()
+            curr_clean = self.to_molblock()
+            if any(
+                is_same_conformer(curr_clean, c, atol=1e-5, quiet=True)
+                for c in reversed(prev_cleans)
+            ):
+                break
+            prev_cleans.append(curr_clean)
+        else:
+            raise ValueError("Cleanup does not converge")
+
         self.kekulize(kekulized)
         return self
 
@@ -172,6 +187,8 @@ class HighlightBackendDocument(ABC):
     def kekulize(self, kekulize: bool) -> Self:
         """Kekulize or dekekulize the underlying molecule."""
         self.kekulize_callback(kekulize)
+        _, aligned, hydrogens_hidden = self.get_edit_state()
+        self.set_edit_state(kekulize, aligned, hydrogens_hidden)
         return self
 
     @abstractmethod
@@ -191,19 +208,19 @@ class HighlightBackendDocument(ABC):
         return self
 
     @abstractmethod
-    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool) -> None:
+    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool = False) -> None:
         """Run after highlighting options are set by `highlight_from_json`."""
 
     @final
-    def highlight_from_json(self, hml_json: str, hide_hydrogens: bool) -> Self:
+    def highlight_from_json(self, hml_json: str, hide_hydrogens: bool = False) -> Self:
         """Set the underlying highlighting options and run the backend's callback."""
         if self.get_hml_json():
             raise ValueError("Already highlighted")
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if hydrogens_hidden:
             raise ValueError("Highlighting after setting hydrogen display not supported")
-        self.highlight_from_json_callback(hml_json, hide_hydrogens)
         self.set_hml_json(hml_json)
+        self.highlight_from_json_callback(hml_json, hide_hydrogens)
         self.set_edit_state(kekulized, aligned, hide_hydrogens)
         return self
 
