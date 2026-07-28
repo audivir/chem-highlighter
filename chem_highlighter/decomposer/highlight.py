@@ -272,8 +272,10 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
     doc = RDKitDocument.from_mol(mol)
 
     # Identify and store which atoms, bonds, and rings we'll be highlighting
+    # use `mol` (not `doc.mol`) since the molblock round-trip performed by
+    # `from_mol` does not preserve the `source_idx_prop` atom property
     hml = convert_decomposed_to_hml(
-        doc.mol,
+        mol,
         groups,
         lbls,
         source_idx_prop,
