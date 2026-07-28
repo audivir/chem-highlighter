@@ -4,11 +4,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import msgspec
+import pytest
 from rdkit import Chem
 
+from chem_highlighter.backend.rdkit import RDKitDocument
+from chem_highlighter.hml import HML, HighlightBackendDocument
 from chem_highlighter.utils import mol_from_smiles
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture
+def doc() -> HighlightBackendDocument:
+    return RDKitDocument.from_mol(mol_from_smiles("c1ccccc1"))
+
+
+@pytest.fixture
+def hml_json() -> str:
+    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
+    return msgspec.json.encode(hml).decode()
 
 
 def from_fixture_molblock(fixture_file: str) -> Chem.Mol:

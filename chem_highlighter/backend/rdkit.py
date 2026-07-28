@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import logging
+from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, Literal, TypeAlias
 
 import matplotlib as mpl
+import msgspec
 from typing_extensions import Self, override
 
 from chem_highlighter.backend.map_tokens import map_smiles_tokens
-from chem_highlighter.hml import HML, EditState, HighlightBackendDocument
+from chem_highlighter.hml import (
+    HML,
+    HighlightBackendDocument,
+    InputFormat,
+    InputFormatNotSupported,
+    OutputFormat,
+    OutputFormatNotSupported,
+)
 from chem_highlighter.modify import apply_transform, flip_bond
 from chem_highlighter.utils import RESET_COLOR, get_ansi_color, get_atoms
 
@@ -138,79 +147,103 @@ class RDKitDocument(HighlightBackendDocument):
         from rdkit.Chem import rdDepictor
 
         self.mol = Chem.Mol(mol)
-        self._hml: HML | None = None
+        self._hml_json: str | None = None
         if not self.mol.GetNumConformers():
             rdDepictor.SetPreferCoordGen(True)
             rdDepictor.Compute2DCoords(self.mol)
-        self._edit_state = EditState(
-            None, False, False
-        )  # RDKit automatically dekekulize on parsing
+        Chem.Kekulize(mol)
+        self._edit_state = True, False, False
 
     @override
-    def get_edit_state(self) -> EditState:
+    def get_edit_state(self) -> tuple[bool, bool, bool]:
         """Get the edit state tuple."""
         return self._edit_state
 
     @override
-    def set_edit_state(self, edit_state: EditState) -> None:
+    def set_edit_state(self, kekulized: bool, aligned: bool, hydrogens_hidden: bool) -> None:
         """Set the edit state."""
-        self._edit_state = edit_state
+        self._edit_state = kekulized, aligned, hydrogens_hidden
 
     @override
-    def get_hml(self) -> HML | None:
-        """Get the HML object."""
-        return self._hml
+    def get_hml_json(self) -> str | None:
+        """Get the JSON-encoded HML object."""
+        return self._hml_json
 
     @override
-    def set_hml(self, hml: HML) -> None:
-        """Set the HML object."""
-        self._hml = hml
+    def set_hml_json(self, hml_json: str) -> None:
+        """Set the JSON-encoded HML object."""
+        self._hml_json = hml_json
 
     @classmethod
     def convert_molblock(cls, molblock: str) -> Chem.Mol:
-        """Convert a molecule as Mol block to a RDKit molecule."""
+        """Convert a molecule as molblock to a RDKit molecule."""
         return cls.from_molblock(molblock).mol
 
     @override
     @classmethod
-    def from_mol(cls, mol: Chem.Mol) -> Self:
-        """Create a RDKitDocument from a provided molecule as RDKit molecule.
+    def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
+        """Create a document from byte data."""
+        from rdkit import Chem
 
-        Args:
-            mol: The RDKit molecule to import.
-        """
+        mol: Chem.Mol | None = None
+        if fmt == "SDF":
+            buffer = BytesIO(data)
+            with Chem.ForwardSDMolSupplier(buffer) as sds:
+                sd_mol: Chem.Mol | None = next(iter(sds), None)
+            mol = sd_mol
+        elif fmt == "Mol":
+            mol = Chem.MolFromMolBlock(data.decode(), removeHs=False)
+        elif fmt == "CDXML":
+            mols: tuple[Chem.Mol, ...] = Chem.MolsFromCDXML(data.decode(), removeHs=False)
+            if not mols:
+                mol = None
+            elif len(mols) > 1:
+                raise ValueError("Multiple molecules in CDXML")
+            else:
+                mol = mols[0]
+        elif fmt == "SMILES":
+            mol = Chem.MolFromSmiles(data.decode())
+        elif fmt == "InChI":
+            inchi_mol: Chem.Mol | None = Chem.MolFromInchi(data.decode(), removeHs=False)  # type: ignore[no-untyped-call]
+            mol = inchi_mol
+        else:
+            # RXN, CDX
+            raise InputFormatNotSupported(f"{cls} does not support importing from {fmt}")
+        if not mol:
+            raise ValueError(f"Invalid {fmt} input")
         return cls(mol)
 
     @override
-    @classmethod
-    def from_molblock(cls, molblock: str) -> Self:
-        """Create a RDKitDocument from a provided molecule as Mol block.
-
-        Args:
-            molblock: The Mol block to import.
-        """
+    def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:  # noqa: PLR0911
+        """Export the document to the specified format as bytes."""
         from rdkit import Chem
 
-        return cls(Chem.MolFromMolBlock(molblock, removeHs=False))
-
-    @override
-    def to_molblock(self) -> str:
-        """Return the underlying molecule as Mol block."""
-        from rdkit import Chem
-
-        return Chem.MolToMolBlock(
-            self.mol, kekulize=self.get_edit_state().kekulized or False, forceV3000=True
-        )
-
-    @override
-    def to_svg(self) -> str:
-        """Return a highlighted (if set) SVG visualization of the molecule."""
-        return draw_mol(self.get_hml(), self.mol, "svg").decode()
-
-    @override
-    def to_png(self) -> bytes:
-        """Return a highlighted (if set) PNG visualization of the molecule."""
-        return draw_mol(self.get_hml(), self.mol, "png")
+        kekulized, _, _ = self.get_edit_state()
+        hml_json = self.get_hml_json()
+        hml = msgspec.json.Decoder(HML).decode(hml_json) if hml_json else None
+        if fmt == "SDF":
+            buffer = StringIO()
+            with Chem.SDWriter(buffer) as sdw:
+                sdw.SetForceV3000(not use_v2000)
+                sdw.SetKekulize(kekulized)
+                sdw.write(self.mol)
+            return buffer.getvalue().encode()
+        if fmt == "Mol":
+            return Chem.MolToMolBlock(
+                self.mol, kekulize=kekulized, forceV3000=not use_v2000
+            ).encode()
+        if fmt == "SMILES":
+            return Chem.MolToSmiles(self.mol, kekuleSmiles=kekulized, canonical=False).encode()
+        if fmt == "InChI":
+            return Chem.MolToInchi(self.mol)[0].encode()  # type: ignore[no-any-return,no-untyped-call]
+        if fmt == "InChIKey":
+            return Chem.MolToInchiKey(self.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
+        if fmt == "SVG":
+            return draw_mol(hml, self.mol, "svg")
+        if fmt == "PNG":
+            return draw_mol(hml, self.mol, "png")
+        # RXN, CDX, CDXML, EPS
+        raise OutputFormatNotSupported(f"{type(self)} does not support exporting to {fmt}")
 
     @override
     def align_to_reference_callback(
@@ -251,8 +284,9 @@ class RDKitDocument(HighlightBackendDocument):
         from rdkit import Chem
 
         mol = Chem.Mol(self.mol)
-        hml = self.get_hml()
-        if hml:
+        hml_json = self.get_hml_json()
+        if hml_json:
+            hml = msgspec.json.Decoder(HML).decode(hml_json)
             for ix in hml.highlighted_atoms:
                 atom = mol.GetAtomWithIdx(ix)
                 if atom.GetSymbol() == "H" and atom.GetIsotope() == 0:  # pragma: no branch
@@ -287,7 +321,8 @@ class RDKitDocument(HighlightBackendDocument):
 
         char_maps = map_smiles_tokens(smiles, self.mol)
 
-        hml = self.get_hml()
+        hml_json = self.get_hml_json()
+        hml = msgspec.json.Decoder(HML).decode(hml_json) if hml_json else None
         hl_atoms = hml.highlighted_atoms if hml else {}
         hl_bonds = hml.highlighted_bonds if hml else {}
         palette = hml.palette if hml else []

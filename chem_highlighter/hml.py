@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from statistics import mean
-from typing import TYPE_CHECKING, NamedTuple, final
+from typing import TYPE_CHECKING, Literal, TypeAlias, final
 
 import msgspec
 from typing_extensions import Self, TypeVar
@@ -26,6 +26,17 @@ HighlightBackendDocumentT_co = TypeVar(
     default="RDKitDocument",
     covariant=True,
 )
+
+InputFormat: TypeAlias = Literal["SDF", "Mol", "RXN", "CDX", "CDXML", "SMILES", "InChI"]
+OutputFormat: TypeAlias = InputFormat | Literal["InChIKey", "SVG", "EPS", "PNG"]
+
+
+class InputFormatNotSupported(Exception):  # noqa: N818
+    """The specified input format is not supported by the backend."""
+
+
+class OutputFormatNotSupported(Exception):  # noqa: N818
+    """The specified output format is not supported by the backend."""
 
 
 class HML(msgspec.Struct, kw_only=True):
@@ -81,62 +92,44 @@ class HMol(HML):
     mol: str
 
 
-class EditState(NamedTuple):
-    """A tuple to store the edit state."""
-
-    kekulized: bool | None
-    aligned: bool
-    hydrogens_hidden: bool
-
-
 class HighlightBackendDocument(ABC):
-    """A structure to store a molecule for highlighting."""
+    """Abstract base class for highlight backend documents."""
 
     @abstractmethod
-    def get_edit_state(self) -> EditState:
+    def get_hml_json(self) -> str | None:
+        """Get the JSON-encoded HML object."""
+
+    @abstractmethod
+    def set_hml_json(self, hml_json: str) -> None:
+        """Set the JSON-encoded HML object."""
+
+    @abstractmethod
+    def get_edit_state(self) -> tuple[bool, bool, bool]:
         """Get the edit state tuple."""
 
     @abstractmethod
-    def set_edit_state(self, edit_state: EditState) -> None:
+    def set_edit_state(self, kekulized: bool, aligned: bool, hydrogens_hidden: bool) -> None:
         """Set the edit state."""
 
-    @abstractmethod
-    def get_hml(self) -> HML | None:
-        """Get the HML object."""
-
-    @abstractmethod
-    def set_hml(self, hml: HML) -> None:
-        """Set the HML object."""
-
     @classmethod
     @abstractmethod
-    def from_mol(cls, mol: Chem.Mol) -> Self:
-        """Create a document from a provided molecule as RDkit molecule."""
+    def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
+        """Create a document from byte data."""
 
+    @final
     @classmethod
-    @abstractmethod
-    def from_molblock(cls, molblock: str) -> Self:
-        """Create a document from a provided molecule as Mol block.
-
-        Args:
-            molblock: The Mol block to import.
-        """
+    def from_string(cls, data: str, fmt: InputFormat) -> Self:
+        """Create a document from string data."""
+        return cls.from_bytes(data.encode(), fmt)
 
     @abstractmethod
-    def to_molblock(self) -> str:
-        """Return the underlying molecule as Mol block."""
+    def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:
+        """Export the document to the specified format as bytes."""
 
-    @abstractmethod
-    def to_svg(self) -> str:
-        """Return a highlighted (if set) SVG visualization of the molecule."""
-
-    @abstractmethod
-    def to_png(self) -> bytes:
-        """Return a highlighted (if set) PNG visualization of the molecule."""
-
-    def to_console(self, canonical: bool = True) -> str:
-        """Return a highlighted (if set) string visualization of the molecule."""
-        raise NotImplementedError  # pragma: no cover
+    @final
+    def export_string(self, fmt: OutputFormat) -> str:
+        """Export the document to the specified format as a string."""
+        return self.export(fmt).decode()
 
     @abstractmethod
     def align_to_reference_callback(
@@ -146,15 +139,11 @@ class HighlightBackendDocument(ABC):
 
     @final
     def align_to_reference(self, reference: str) -> Self:
-        """Align the underlying molecule to a reference molecule.
-
-        Args:
-            reference: The reference molecule as Mol block.
-        """
-        edit_state = self.get_edit_state()
-        if edit_state.aligned:
+        """Align the underlying molecule to a reference molecule as molblock."""
+        kekulized, aligned, hydrogens_hidden = self.get_edit_state()
+        if aligned:
             raise ValueError("Already aligned")
-        self.set_edit_state(edit_state._replace(aligned=True))
+        self.set_edit_state(kekulized, True, hydrogens_hidden)
         flips, global_flip, angle = get_alignment_ops_from_molblock(
             self.to_molblock(), reference, atol=1e-5
         )
@@ -168,10 +157,11 @@ class HighlightBackendDocument(ABC):
     @final
     def cleanup(self) -> Self:
         """Cleanup the molecule using the backend's features."""
-        edit_state = self.get_edit_state()
-        if edit_state.kekulized is not None or edit_state.aligned:
-            raise ValueError("Cleanup after kekulization or alignment not supported")
+        kekulized, aligned, _ = self.get_edit_state()
+        if aligned:
+            raise ValueError("Cleanup after alignment not supported")
         self.cleanup_callback()
+        self.kekulize(kekulized)
         return self
 
     @abstractmethod
@@ -181,10 +171,6 @@ class HighlightBackendDocument(ABC):
     @final
     def kekulize(self, kekulize: bool) -> Self:
         """Kekulize or dekekulize the underlying molecule."""
-        edit_state = self.get_edit_state()
-        if edit_state.kekulized is not None:
-            raise ValueError("Already kekulized")
-        self.set_edit_state(edit_state._replace(kekulized=kekulize))
         self.kekulize_callback(kekulize)
         return self
 
@@ -195,38 +181,76 @@ class HighlightBackendDocument(ABC):
     @final
     def hide_hydrogens(self) -> Self:
         """Hide featureless hydrogens."""
-        if self.get_hml():
+        if self.get_hml_json():
             raise ValueError("Setting hydrogen display after highlighting not supported")
-        edit_state = self.get_edit_state()
-        if edit_state.hydrogens_hidden:
+        kekulized, aligned, hydrogens_hidden = self.get_edit_state()
+        if hydrogens_hidden:
             raise ValueError("Hydrogen display already set")
-        self.set_edit_state(edit_state._replace(hydrogens_hidden=True))
+        self.set_edit_state(kekulized, aligned, True)
         self.hide_hydrogens_callback()
         return self
 
     @abstractmethod
-    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool | None) -> None:
+    def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool) -> None:
         """Run after highlighting options are set by `highlight_from_json`."""
 
     @final
-    def highlight_from_json(self, hml_json: str, hide_hydrogens: bool | None) -> Self:
+    def highlight_from_json(self, hml_json: str, hide_hydrogens: bool) -> Self:
         """Set the underlying highlighting options and run the backend's callback."""
-        if self.get_hml():
+        if self.get_hml_json():
             raise ValueError("Already highlighted")
-        edit_state = self.get_edit_state()
-        if edit_state.hydrogens_hidden:
+        kekulized, aligned, hydrogens_hidden = self.get_edit_state()
+        if hydrogens_hidden:
             raise ValueError("Highlighting after setting hydrogen display not supported")
-        if hide_hydrogens is not None:
-            self.set_edit_state(edit_state._replace(hydrogens_hidden=True))
-        self.set_hml(msgspec.json.Decoder(HML).decode(hml_json))
+        self.set_edit_state(kekulized, aligned, hide_hydrogens)
+        self.set_hml_json(hml_json)
         self.highlight_from_json_callback(hml_json, hide_hydrogens)
         return self
+
+    @final
+    @classmethod
+    def from_mol(cls, mol: Chem.Mol) -> Self:
+        """Create a document from a provided molecule as RDkit molecule."""
+        from rdkit import Chem
+
+        return cls.from_molblock(Chem.MolToMolBlock(mol, forceV3000=True))
+
+    @final
+    @classmethod
+    def from_molblock(cls, molblock: str) -> Self:
+        """Create a document from a provided molecule as molblock."""
+        return cls.from_string(molblock, "Mol")
+
+    @final
+    def to_molblock(self) -> str:
+        """Return the underlying molecule as molblock."""
+        return self.export_string("Mol")
+
+    @final
+    def to_svg(self) -> str:
+        """Return a highlighted (if set) SVG visualization of the molecule."""
+        return self.export_string("SVG")
+
+    @final
+    def to_png(self) -> bytes:
+        """Return a highlighted (if set) PNG visualization of the molecule."""
+        return self.export("PNG")
+
+    def to_console(self, canonical: bool = True) -> str:
+        """Return a highlighted (if set) string visualization of the molecule."""
+        from rdkit import Chem
+
+        smiles = self.export_string("SMILES")
+        if canonical:
+            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles))
+        return smiles
 
     @final
     def to_hmol_json(self) -> str:
         """Return a JSON-encoded of the molecule including its highlighting options."""
         hmol = HMol(mol=self.to_molblock())
-        if hml := self.get_hml():
+        if hml_json := self.get_hml_json():
+            hml = msgspec.json.Decoder(HML).decode(hml_json)
             for field in hml.__struct_fields__:
                 setattr(hmol, field, getattr(hml, field))
         return msgspec.json.encode(hmol).decode()

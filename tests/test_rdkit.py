@@ -11,7 +11,7 @@ from conftest import assert_mols_equal, extract_bond_codes, from_fixture_molbloc
 from rdkit import Chem
 
 from chem_highlighter.backend.rdkit import RDKitDocument
-from chem_highlighter.hml import HML, EditState
+from chem_highlighter.hml import HML
 from chem_highlighter.utils import is_same_conformer, mol_from_smiles, move_molecule
 
 if TYPE_CHECKING:
@@ -32,8 +32,8 @@ def _mol_from_explicit_smiles(smiles: str) -> Chem.Mol:
 def test_from_mol() -> None:
     doc = _doc("CCO")
     assert doc.mol.GetNumAtoms() == 3
-    assert doc.get_hml() is None
-    assert doc.get_edit_state() == EditState(None, False, False)
+    assert doc.get_hml_json() is None
+    assert doc.get_edit_state() == (True, False, False)
 
 
 def test_from_molblock() -> None:
@@ -67,7 +67,7 @@ def test_to_svg_with_atom_and_bond_highlights() -> None:
         highlighted_bonds={0: 0},
         palette=["#ff0000"],
     )
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
     svg = doc.to_svg()
     assert "<svg" in svg
     assert svg != before, "highlighting should change the rendered SVG"
@@ -84,7 +84,7 @@ def test_to_svg_with_ring_highlights() -> None:
         rings=[[0, 1, 2, 3, 4, 5]],
         palette=["#ff0000"],
     )
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
     svg = doc.to_svg()
     assert "<svg" in svg
     assert svg != before, "highlighting should change the rendered SVG"
@@ -103,16 +103,12 @@ def test_to_console() -> None:
         highlighted_bonds={0: 1},
         palette=["#ff0000", "#00ff00"],
     )
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
     assert doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1ccc\033[38;2;255;0;0m(C)\033[0mcc1"
 
 
-@pytest.mark.parametrize("kekulize", [True, False])
-def test_kekulize(kekulize: bool) -> None:
-    doc = _doc("c1ccccc1")
-    doc.kekulize(kekulize)
-    assert doc.get_edit_state().kekulized == kekulize
-
+def assert_benzene_kekulized(doc: RDKitDocument, kekulized: bool) -> None:
+    assert doc.get_edit_state() == (kekulized, False, False)
     ring_bonds = [doc.mol.GetBondBetweenAtoms(i, (i + 1) % 6) for i in range(6)]
     ring_bond_types = [b.GetBondType() for b in ring_bonds]
     bond_type_codes = extract_bond_codes(doc.to_molblock())
@@ -123,7 +119,7 @@ def test_kekulize(kekulize: bool) -> None:
 
     assert all(bond.GetIsAromatic() for bond in ring_bonds)
 
-    if kekulize:
+    if kekulized:
         assert set(ring_bond_types) == {Chem.BondType.SINGLE, Chem.BondType.DOUBLE}
         assert ring_bond_types in kekule_bonds
         assert 4 not in bond_type_codes, "exported Mol block still has aromatic bond codes"
@@ -131,6 +127,15 @@ def test_kekulize(kekulize: bool) -> None:
     else:
         assert set(ring_bond_types) == {Chem.BondType.AROMATIC}
         assert set(bond_type_codes) == {4}, "exported Mol block should use the aromatic bond code"
+
+
+def test_kekulize() -> None:
+    doc = _doc("c1ccccc1")
+    assert_benzene_kekulized(doc, True)
+    doc.kekulize(False)
+    assert_benzene_kekulized(doc, False)
+    doc.kekulize(True)
+    assert_benzene_kekulized(doc, True)
 
 
 @pytest.mark.parametrize(
@@ -155,13 +160,13 @@ def test_hide_hydrogens_mol() -> None:
     assert_mols_equal(doc.mol, from_fixture_molblock("hs_mol_hide.mol"))
 
 
-def test_hide_hydrogens_keeps_a_highlighted_hydrogen() -> None:
+def test_hide_hydrogens_keeps_a_highlighted_hydrogen(hml_json: str) -> None:
     doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc.hide_hydrogens_callback()
     assert doc.mol.GetNumAtoms() == 3  # only 2 Cs and [2H]
 
     doc = RDKitDocument.from_mol(_mol_from_explicit_smiles("[H]C([2H])C[H]"))
-    doc.set_hml(HML(highlighted_atoms={0: 0}, palette=["#ff0000"]))
+    doc.set_hml_json(hml_json)
     doc.hide_hydrogens_callback()
     assert doc.mol.GetNumAtoms() == 4  # 2 Cs, [2H], and highlighted [H]
 

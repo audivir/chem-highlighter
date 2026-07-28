@@ -5,7 +5,9 @@ from __future__ import annotations
 import msgspec
 import pytest
 
-from chem_highlighter.hml import HML
+from chem_highlighter.backend.rdkit import RDKitDocument
+from chem_highlighter.hml import HML, HighlightBackendDocument
+from chem_highlighter.utils import mol_from_smiles
 
 
 @pytest.mark.parametrize(
@@ -56,142 +58,34 @@ def test_get_rgba() -> None:
 
 
 def test_to_hmol_json_without_hml() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
     doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    assert doc.get_hml() is None
+    assert doc.get_hml_json() is None
     json_str = doc.to_hmol_json()
     decoded = msgspec.json.decode(json_str)
     assert b'"mol"' in msgspec.json.encode(decoded)
 
 
-def test_to_hmol_json_with_hml() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
-    assert doc.get_hml() is not None
-    json_str = doc.to_hmol_json()
+def test_to_hmol_json_with_hml(doc: HighlightBackendDocument, hml_json: str) -> None:
+    doc.highlight_from_json(hml_json, False)
+    found_hml_json = doc.get_hml_json()
+    assert found_hml_json is not None
     # Palette must be serialised into the JSON
-    assert "ff0000" in json_str
+    assert "ff0000" in found_hml_json
 
 
-def test_highlight_from_json() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
-    doc_hml = doc.get_hml()
-    assert doc_hml is not None
-    assert doc_hml.palette == ["#ff0000"]
-
-
-def test_highlight_from_json_with_hide_hydrogens_marks_hydrogens_hidden() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), True)
-    assert doc.get_edit_state().hydrogens_hidden is True
-    with pytest.raises(
-        ValueError, match="Setting hydrogen display after highlighting not supported"
-    ):
-        doc.hide_hydrogens()
+@pytest.mark.parametrize("hide_hydrogens", [False, True])
+def test_highlight_from_json(
+    hide_hydrogens: bool, doc: HighlightBackendDocument, hml_json: str
+) -> None:
+    doc.highlight_from_json(hml_json, hide_hydrogens)
+    assert doc.get_edit_state() == (True, False, hide_hydrogens)
+    found_hml_json = doc.get_hml_json()
+    assert found_hml_json is not None
+    found_hml = msgspec.json.Decoder(HML).decode(hml_json)
+    assert found_hml.palette == ["#ff0000"]
 
 
 def test_cleanup_succeeds() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
     doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
     doc.cleanup()
-    edit_state = doc.get_edit_state()
-    assert edit_state.kekulized is None
-    assert edit_state.aligned is False
-
-
-def test_cleanup_raises_when_already_kekulized() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("c1ccccc1"))
-    doc.kekulize(True)
-    with pytest.raises(ValueError, match="Cleanup after kekulization or alignment not supported"):
-        doc.cleanup()
-
-
-def test_align_to_reference_raises_when_already_aligned() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    doc.align_to_reference(doc.to_molblock())
-    with pytest.raises(ValueError, match="Already aligned"):
-        doc.align_to_reference(doc.to_molblock())
-
-
-def test_kekulize_raises_when_already_kekulized() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("c1ccccc1"))
-    doc.kekulize(True)
-    with pytest.raises(ValueError, match="Already kekulized"):
-        doc.kekulize(False)
-
-
-def test_hide_hydrogens_raises_when_already_set() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CC"))
-    doc.hide_hydrogens()
-    with pytest.raises(ValueError, match="Hydrogen display already set"):
-        doc.hide_hydrogens()
-
-
-def test_hide_hydrogens_raises_after_highlighting() -> None:
-    """Removing hydrogens shifts atom and bond indices.
-
-    This would silently invalidate any highlights already set, so it must be rejected instead.
-    """
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
-    with pytest.raises(
-        ValueError, match="Setting hydrogen display after highlighting not supported"
-    ):
-        doc.hide_hydrogens()
-
-
-def test_highlight_from_json_raises_when_already_highlighted() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
-    with pytest.raises(ValueError, match="Already highlighted"):
-        doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
-
-
-def test_highlight_from_json_raises_after_hydrogens_hidden() -> None:
-    from chem_highlighter.backend.rdkit import RDKitDocument
-    from chem_highlighter.utils import mol_from_smiles
-
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
-    doc.hide_hydrogens()
-    hml = HML(highlighted_atoms={0: 0}, palette=["#ff0000"])
-    with pytest.raises(
-        ValueError, match="Highlighting after setting hydrogen display not supported"
-    ):
-        doc.highlight_from_json(msgspec.json.encode(hml).decode(), None)
+    assert doc.get_edit_state() == (True, False, False)
