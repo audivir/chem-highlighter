@@ -6,6 +6,14 @@ from typing import TYPE_CHECKING, Literal
 
 import msgspec
 import pytest
+from utils import (
+    assert_benzene_kekulized,
+    assert_mols_equal,
+    from_fixture_molblock,
+    mol_from_explicit_smiles,
+    read_fixture,
+)
+
 from chem_highlighter.backend.rdkit import RDKitDocument
 from chem_highlighter.hml import (
     HML,
@@ -16,13 +24,6 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.utils import is_same_conformer, mol_to_smiles
-from utils import (
-    assert_benzene_kekulized,
-    assert_mols_equal,
-    from_fixture_molblock,
-    mol_from_explicit_smiles,
-    read_fixture,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -277,3 +278,15 @@ def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendDocu
     assert "00ff00" in ring_svg.lower(), (
         "the ring highlight color should actually appear in the SVG"
     )
+
+
+def assert_to_console(backend: type[HighlightBackendDocumentT_co]) -> None:
+    doc = backend.from_string("C=COCc1ccc(C)cc1", "SMILES")
+    doc.kekulize(False)
+    hml = HML(
+        highlighted_atoms={8: 0},
+        highlighted_bonds={0: 1},
+        palette=["#ff0000", "#00ff00"],
+    )
+    doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
+    assert doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1ccc\033[38;2;255;0;0m(C)\033[0mcc1"

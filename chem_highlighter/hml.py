@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from statistics import mean
 from typing import TYPE_CHECKING, Literal, TypeAlias, final
@@ -10,7 +11,13 @@ import msgspec
 from typing_extensions import Self, TypeVar
 
 from chem_highlighter.align import get_alignment_ops_from_molblock
-from chem_highlighter.utils import get_high_precision_v3000, is_same_conformer
+from chem_highlighter.backend.map_tokens import map_smiles_tokens
+from chem_highlighter.utils import (
+    RESET_COLOR,
+    get_ansi_color,
+    get_high_precision_v3000,
+    is_same_conformer,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
@@ -253,12 +260,45 @@ class HighlightBackendDocument(ABC):
 
     def to_console(self, canonical: bool = True) -> str:
         """Return a highlighted (if set) string visualization of the molecule."""
+        os.environ["FORCE_COLOR"] = "1"
+
         from rdkit import Chem
 
-        smiles = self.export_string("SMILES")
-        if canonical:
-            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles))
-        return smiles
+        mol = Chem.MolFromMolBlock(self.to_molblock(), removeHs=False)
+
+        kekulized, _, _ = self.get_edit_state()
+
+        smiles = Chem.MolToSmiles(
+            mol, kekuleSmiles=kekulized, canonical=canonical, allBondsExplicit=True
+        )
+
+        char_maps = map_smiles_tokens(smiles, mol)
+
+        hml_json = self.get_hml_json()
+        hml = msgspec.json.Decoder(HML).decode(hml_json) if hml_json else None
+        hl_atoms = hml.highlighted_atoms if hml else {}
+        hl_bonds = hml.highlighted_bonds if hml else {}
+        palette = hml.palette if hml else []
+
+        current_color: int | None = None
+        chars_out: list[str] = []
+        for cm in char_maps:
+            if cm.type == "impl_bond":
+                continue
+            group_ix = hl_atoms.get(cm.ix) if cm.belongs_to == "atom" else hl_bonds.get(cm.ix)
+            if group_ix is None:
+                if current_color is not None:
+                    current_color = None
+                    chars_out.append(RESET_COLOR)
+            elif group_ix != current_color:
+                new_color = get_ansi_color(palette, group_ix)
+                current_color = group_ix
+                chars_out.append(new_color)
+            chars_out.append(cm.token)
+        if current_color is not None:  # pragma: no cover
+            chars_out.append(RESET_COLOR)
+
+        return "".join(chars_out)
 
     @final
     def to_hmol_json(self) -> str:

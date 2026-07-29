@@ -104,6 +104,7 @@ def test_highlight_from_json(hml_json: str) -> None:
 
 def test_to_console() -> None:
     doc = RDKitDocument.from_string("C=COCc1ccc(C)cc1", "SMILES")
+    doc.kekulize(False)
     hml = HML(
         highlighted_atoms={8: 0},
         highlighted_bonds={0: 1},
@@ -111,5 +112,5 @@ def test_to_console() -> None:
     )
     doc.highlight_from_json(msgspec.json.encode(hml).decode(), False)
     assert (
-        doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1=cc=c\033[38;2;255;0;0m(C)\033[0mc=c1"
+        doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1ccc\033[38;2;255;0;0m(C)\033[0mcc1"
     )

@@ -10,7 +10,6 @@ import matplotlib as mpl
 import msgspec
 from typing_extensions import Self, override
 
-from chem_highlighter.backend.map_tokens import map_smiles_tokens
 from chem_highlighter.hml import (
     HML,
     HighlightBackendDocument,
@@ -20,7 +19,7 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.modify import apply_transform, flip_bond
-from chem_highlighter.utils import RESET_COLOR, get_ansi_color, get_atoms, get_high_precision_v3000
+from chem_highlighter.utils import get_atoms, get_high_precision_v3000
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -302,46 +301,3 @@ class RDKitDocument(HighlightBackendDocument):
         """Do nothing as highlighting occurs during visualization only."""
         if hide_hydrogens:
             self.hide_hydrogens_callback()
-
-    @override
-    def to_console(self, canonical: bool = True) -> str:
-        """Return a colored string visualization of the molecule.
-
-        Atoms and bonds that are highlighted in the HML are rendered with
-        ANSI color codes via termcolor.
-        """
-        import os
-
-        os.environ["FORCE_COLOR"] = "1"
-
-        from rdkit import Chem
-
-        smiles = Chem.MolToSmiles(self.mol, canonical=canonical, allBondsExplicit=True)
-
-        char_maps = map_smiles_tokens(smiles, self.mol)
-
-        hml_json = self.get_hml_json()
-        hml = msgspec.json.Decoder(HML).decode(hml_json) if hml_json else None
-        hl_atoms = hml.highlighted_atoms if hml else {}
-        hl_bonds = hml.highlighted_bonds if hml else {}
-        palette = hml.palette if hml else []
-
-        current_color: int | None = None
-        chars_out: list[str] = []
-        for cm in char_maps:
-            if cm.type == "impl_bond":
-                continue
-            group_ix = hl_atoms.get(cm.ix) if cm.belongs_to == "atom" else hl_bonds.get(cm.ix)
-            if group_ix is None:
-                if current_color is not None:
-                    current_color = None
-                    chars_out.append(RESET_COLOR)
-            elif group_ix != current_color:
-                new_color = get_ansi_color(palette, group_ix)
-                current_color = group_ix
-                chars_out.append(new_color)
-            chars_out.append(cm.token)
-        if current_color is not None:  # pragma: no cover
-            chars_out.append(RESET_COLOR)
-
-        return "".join(chars_out)
