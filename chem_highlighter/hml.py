@@ -210,7 +210,10 @@ class HighlightBackendDocument(ABC):
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if hydrogens_hidden:
             raise ValueError("Hydrogen display already set")
+        # self.kekulize(True)
         self.hide_hydrogens_callback()
+        #if not kekulized:
+        #    self.kekulize(False)
         self.set_edit_state(kekulized, aligned, True)
         return self
 
