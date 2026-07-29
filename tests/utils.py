@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pytest
 from rdkit import Chem
 
 if TYPE_CHECKING:
+    from _pytest.mark import ParameterSet
     from chem_highlighter.hml import HighlightBackendDocument
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FIXTURES_ORDER = [FIXTURES]
@@ -26,6 +27,10 @@ def read_fixture(fixture_file: str) -> str:
         if path.exists():
             return path.read_text()
     raise ValueError(f"Fixture {fixture_file} not found")
+
+
+def xfail_param(value: object, reason: str) -> ParameterSet:
+    return pytest.param(value, marks=[pytest.mark.xfail(reason=reason)])
 
 
 def mol_from_explicit_smiles(smiles: str) -> Chem.Mol:

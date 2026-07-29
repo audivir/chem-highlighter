@@ -6,14 +6,6 @@ from typing import TYPE_CHECKING, Literal
 
 import msgspec
 import pytest
-from utils import (
-    assert_benzene_kekulized,
-    assert_mols_equal,
-    from_fixture_molblock,
-    mol_from_explicit_smiles,
-    read_fixture,
-)
-
 from chem_highlighter.backend.rdkit import RDKitDocument
 from chem_highlighter.hml import (
     HML,
@@ -24,6 +16,13 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.utils import is_same_conformer, mol_to_smiles
+from utils import (
+    assert_benzene_kekulized,
+    assert_mols_equal,
+    from_fixture_molblock,
+    mol_from_explicit_smiles,
+    read_fixture,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
