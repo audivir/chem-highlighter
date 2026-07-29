@@ -119,3 +119,67 @@ def test_to_console() -> None:
     assert (
         doc.to_console() == "C\033[38;2;0;255;0m=\033[0mCOCc1ccc\033[38;2;255;0;0m(C)\033[0mcc1"
     )
+
+
+def test_high_precision_v3000_export_survives_reload() -> None:
+    """get_high_precision_v3000's extra decimal places aren't just cosmetic padding.
+
+    Mirrors the equivalent precision check on the Rust side: the plain V3000 export rounds
+    coordinates to 6 decimal places; the high-precision one carries the conformer's own unrounded
+    floats. Checked by actually reloading both back into RDKit and comparing conformer positions,
+    not just by inspecting decimal digit counts in the text.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDepictor
+
+    from chem_highlighter.utils import get_high_precision_v3000
+
+    mol = Chem.MolFromSmiles("c1ccccc1O")
+    rdDepictor.Compute2DCoords(mol)
+    Chem.Kekulize(mol)
+
+    default = Chem.MolToMolBlock(mol, forceV3000=True)
+    high_precision = get_high_precision_v3000(mol)
+    assert default != high_precision
+
+    mol_default = Chem.MolFromMolBlock(default)
+    mol_hp = Chem.MolFromMolBlock(high_precision)
+    conf_default = mol_default.GetConformer()
+    conf_hp = mol_hp.GetConformer()
+
+    original_conf = mol.GetConformer()
+    saw_a_real_difference = False
+    for atom_ix in range(mol.GetNumAtoms()):
+        original_pos = original_conf.GetAtomPosition(atom_ix)
+        default_pos = conf_default.GetAtomPosition(atom_ix)
+        hp_pos = conf_hp.GetAtomPosition(atom_ix)
+
+        # The high-precision reload should always be at least as close to the true original as
+        # the plain rounded reload -- and strictly closer for at least one atom, confirming the
+        # extra digits actually reached the reloaded conformer.
+        assert abs(hp_pos.x - original_pos.x) <= abs(default_pos.x - original_pos.x)
+        assert abs(hp_pos.y - original_pos.y) <= abs(default_pos.y - original_pos.y)
+        if hp_pos.x != default_pos.x or hp_pos.y != default_pos.y:
+            saw_a_real_difference = True
+    assert saw_a_real_difference
+
+
+def test_molfromvolblock_import_is_bit_exact() -> None:
+    """RDKit's V3000 parser has no precision floor of its own.
+
+    Unlike some backends' V3000 importers, which impose their own precision ceiling
+    independent of the file format's own limits, whatever decimal value is in the text comes
+    back out of the conformer bit-for-bit.
+    """
+    from rdkit import Chem
+
+    x, y = 0.123456789012345, -0.987654321098765
+    molblock = (
+        "\n  Test\n\n  0  0  0     0  0              0 V3000\n"
+        "M  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n"
+        f"M  V30 1 C {x!r} {y!r} 0.0 0\nM  V30 END ATOM\nM  V30 END CTAB\nM  END\n"
+    )
+    mol = Chem.MolFromMolBlock(molblock)
+    pos = mol.GetConformer().GetAtomPosition(0)
+    assert pos.x == x
+    assert pos.y == y
