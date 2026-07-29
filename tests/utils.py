@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
 from rdkit import Chem
 
 if TYPE_CHECKING:
@@ -75,6 +76,13 @@ def assert_benzene_kekulized(doc: HighlightBackendDocument, kekulized: bool) -> 
 
     else:
         assert bond_type_codes == [4] * 6, "exported Mol block should use the aromatic bond code"
+
+
+def get_conf_position_mae(mol: Chem.Mol, molblock: str) -> float:
+    new_mol = Chem.MolFromMolBlock(molblock, removeHs=False)
+    mol_pos = mol.GetConformer().GetPositions()
+    new_pos = new_mol.GetConformer().GetPositions()
+    return float(np.mean(np.abs(new_pos - mol_pos)))
 
 
 def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:

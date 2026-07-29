@@ -11,7 +11,7 @@ from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from rdkit.Chem.Draw import rdDepictor
 from rdkit.Geometry import Point3D
-from utils import FIXTURES, assert_mols_equal, from_fixture_molblock
+from utils import FIXTURES, assert_mols_equal, from_fixture_molblock, get_conf_position_mae
 
 from chem_highlighter.utils import (
     add_hydrogens,
@@ -136,13 +136,6 @@ def test_add_hydrogens() -> None:
     [with_hs] = add_hydrogens([mol])
     assert with_hs.GetNumAtoms() > heavy_count
     assert any(a.GetSymbol() == "H" for a in get_atoms(with_hs))
-
-
-def get_conf_position_mae(mol: Chem.Mol, molblock: str) -> float:
-    new_mol = Chem.MolFromMolBlock(molblock, removeHs=False)
-    mol_pos = mol.GetConformer().GetPositions()
-    new_pos = new_mol.GetConformer().GetPositions()
-    return float(np.mean(np.abs(new_pos - mol_pos)))
 
 
 @pytest.mark.parametrize(("mode", "prec"), [("v2000", 1e-4), ("v3000", None), ("hp_v3000", None)])
