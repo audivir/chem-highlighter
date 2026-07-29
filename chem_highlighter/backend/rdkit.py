@@ -19,7 +19,7 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.modify import apply_transform, flip_bond
-from chem_highlighter.utils import get_atoms, get_high_precision_v3000
+from chem_highlighter.utils import get_atoms, get_high_precision_v3000, get_png_render_options
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -98,22 +98,38 @@ def draw_mol(
 
     if not hml:
         hml = HML()
-    # width, height = sub_img_size # noqa: ERA001
 
-    # if align_to and tmol.HasSubstructMatch(align_to):
-    #     rdDepictor.GenerateDepictionMatching2DStructure(tmol, align_to) # noqa: ERA001
+    transparent, width, height = get_png_render_options()
 
-    drawer = Draw.MolDraw2DCairo(-1, -1) if output == "png" else Draw.MolDraw2DSVG(-1, -1)
+    if output == "png" and width is not None and height is not None:
+        drawer = Draw.MolDraw2DCairo(round(width), round(height))
+        auto_fit = True
+    elif output == "png":
+        drawer = Draw.MolDraw2DCairo(-1, -1)
+        auto_fit = False
+    else:
+        drawer = Draw.MolDraw2DSVG(-1, -1)
+        auto_fit = False
 
     clear_background = True
     if not opts:
-        mean_bond_length = Draw.MeanBondLength(mol) or 1.0
         opts = drawer.drawOptions()
-        Draw.SetACS1996Mode(opts, mean_bond_length)
+        if auto_fit:
+            # A fixed canvas size auto-fits/centers the molecule to it (unlike ACS1996 mode,
+            # which draws at a fixed absolute scale regardless of canvas size), matching the
+            # bounding-box behavior of another backend's resvg-based PNG renderer. Only used
+            # once a size is actually configured -- unconfigured, PNG keeps its previous -1,-1
+            # ACS1996 sizing.
+            opts.prepareMolsBeforeDrawing = True  # type: ignore[assignment]
+        else:
+            mean_bond_length = Draw.MeanBondLength(mol) or 1.0
+            Draw.SetACS1996Mode(opts, mean_bond_length)
+            opts.prepareMolsBeforeDrawing = False  # type: ignore[assignment]
     else:  # pragma: no cover
         clear_background = opts.clearBackground
     opts.clearBackground = True  # type: ignore[assignment]
-    opts.prepareMolsBeforeDrawing = False  # type: ignore[assignment]
+    if output == "png" and transparent:
+        opts.setBackgroundColour((1, 1, 1, 0))
     drawer.SetDrawOptions(opts)
 
     if fill_rings:  # pragma: no branch
@@ -130,7 +146,7 @@ def draw_mol(
         tree = fix_svg(svg)
         # svg = add_legend(svg, legend, line_breaks=False) # noqa: ERA001
         return to_string(tree).encode()  # type: ignore[no-any-return,unused-ignore]
-    return drawer.GetDrawingText()  # type: ignore[return-value]
+    return drawer.GetDrawingText()  # type: ignore[no-any-return]
 
 
 class RDKitDocument(HighlightBackendDocument):

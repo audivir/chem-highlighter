@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import TYPE_CHECKING, NamedTuple, TypeAlias
 
@@ -21,6 +22,38 @@ RGBA: TypeAlias = tuple[float, float, float, float]  # pragma: no cover
 RED_COLOR = "\033[91m"
 GREEN_COLOR = "\033[92m"
 RESET_COLOR = "\033[0m"
+
+
+def _float_env(name: str) -> float | None:
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def get_png_render_options() -> tuple[bool, float | None, float | None]:
+    """Return `(transparent, width, height)` for PNG rendering.
+
+    Read from CHEM_HIGHLIGHTER_PNG_TRANSPARENT/CHEM_HIGHLIGHTER_PNG_WIDTH/
+    CHEM_HIGHLIGHTER_PNG_HEIGHT, so every backend (other implementations' own equivalent, this
+    package's RDKit backend) renders PNGs to the same bounding box from the same knobs, with no
+    per-call channel for it (neither `export(fmt)` nor other backends' own export requests carry
+    per-call arguments). `width`/`height` are `None` when unset -- callers should then fall back
+    to their own natural/unbounded size (RDKit's `-1, -1`; another backend's own SVG size) rather
+    than a hardcoded default, so an unconfigured install renders the same as before this existed.
+    If only one of width/height is set, the other mirrors it (a square bound).
+    """
+    transparent = os.environ.get("CHEM_HIGHLIGHTER_PNG_TRANSPARENT") == "true"
+    width = _float_env("CHEM_HIGHLIGHTER_PNG_WIDTH")
+    height = _float_env("CHEM_HIGHLIGHTER_PNG_HEIGHT")
+    if width is None:
+        width = height
+    if height is None:
+        height = width
+    return transparent, width, height
 
 
 class SmilesMolPair(NamedTuple):
