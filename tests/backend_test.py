@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+import struct
 from typing import TYPE_CHECKING, Literal
 
 import msgspec
@@ -25,7 +28,7 @@ from utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
 ALIGNMENTS = [
     ("3-methylbutanone.mol", ["_44cw", "_b12", "_bf", "_hf", "_vf"]),
@@ -86,6 +89,27 @@ def assert_export_mdl(
     assert backend.from_string(output, fmt).export_string("SMILES") == expected
 
 
+def png_dimensions(data: bytes) -> tuple[int, int]:
+    """Read the (width, height) out of a PNG's IHDR chunk."""
+    width, height = struct.unpack(">II", data[16:24])
+    return width, height
+
+
+@contextlib.contextmanager
+def _env(**variables: str) -> Iterator[None]:
+    """Temporarily set env vars, restoring (or unsetting) the previous values afterward."""
+    previous = {name: os.environ.get(name) for name in variables}
+    os.environ.update(variables)
+    try:
+        yield
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 def assert_export_images(
     fmt: Literal["SVG", "PNG", "EPS"],
     backend: type[HighlightBackendDocumentT_co],
@@ -95,8 +119,33 @@ def assert_export_images(
         assert b"<svg" in output
     elif fmt == "PNG":
         assert b"\x89PNG" in output
+        width, height = png_dimensions(output)
+        assert width > 0
+        assert height > 0
     elif fmt == "EPS":
         assert b"EPSF-1.2" in output
+
+
+def assert_export_png_respects_configured_size(
+    backend: type[HighlightBackendDocumentT_co],
+) -> None:
+    """Confirm CHEM_HIGHLIGHTER_PNG_WIDTH/HEIGHT actually reach the PNG renderer.
+
+    Both backends bound the rendered PNG to the configured box, but not identically: the other
+    backend (via resvg) shrinks the canvas itself to the molecule's aspect ratio within the box,
+    while RDKit draws a fixed canvas at exactly the configured size and centers the molecule in
+    it. So this only asserts the shared contract -- neither dimension exceeds what was
+    configured, and the render isn't silently falling back to something tiny -- not exact
+    equality.
+    """
+    with _env(CHEM_HIGHLIGHTER_PNG_WIDTH="137", CHEM_HIGHLIGHTER_PNG_HEIGHT="141"):
+        output = create_doc("c1ccccc1", backend).export("PNG")
+    width, height = png_dimensions(output)
+    assert width <= 137, f"width {width} exceeds the configured bound of 137"
+    assert height <= 141, f"height {height} exceeds the configured bound of 141"
+    assert max(width, height) >= 100, (
+        f"expected a size close to the configured bound, got {width}x{height}"
+    )
 
 
 def assert_export(

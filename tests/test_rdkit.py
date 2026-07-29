@@ -15,6 +15,7 @@ from backend_test import (
     assert_export,
     assert_export_images,
     assert_export_mdl,
+    assert_export_png_respects_configured_size,
     assert_export_unsupported_format,
     assert_from_bytes,
     assert_from_bytes_cdxml,
@@ -46,6 +47,10 @@ def test_export_mdl(fmt: Literal["SDF", "Mol", "RXN"], use_v2000: bool) -> None:
 @pytest.mark.parametrize("fmt", ["SVG", "PNG"])
 def test_export_images(fmt: Literal["SVG", "PNG", "EPS"]) -> None:
     assert_export_images(fmt, RDKitDocument)
+
+
+def test_export_png_respects_configured_size() -> None:
+    assert_export_png_respects_configured_size(RDKitDocument)
 
 
 @pytest.mark.parametrize("fmt", ["SMILES", "InChI", "InChIKey"])
