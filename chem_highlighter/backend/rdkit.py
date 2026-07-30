@@ -207,7 +207,7 @@ class RDKitDocument(HighlightBackendDocument):
             if not mols:
                 mol = None
             elif len(mols) > 1:
-                raise ValueError("Multiple molecules in CDXML")
+                raise ValueError(f"Invalid {fmt} input: Multiple groups/fragments found")
             else:
                 mol = mols[0]
         elif fmt == "SMILES":

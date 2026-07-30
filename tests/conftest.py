@@ -11,6 +11,11 @@ from chem_highlighter.utils import mol_from_smiles
 
 
 @pytest.fixture
+def atol() -> float:
+    return 1e-5
+
+
+@pytest.fixture
 def doc() -> HighlightBackendDocument:
     return RDKitDocument.from_mol(mol_from_smiles("c1ccccc1"))
 

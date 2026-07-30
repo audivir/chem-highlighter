@@ -175,12 +175,14 @@ def test_hide_hydrogens_raises_after_highlight_from_json_with_hide_hydrogens(
         doc.hide_hydrogens()
 
 
-def test_callback_methods_bypass_the_guard(doc: HighlightBackendDocument, hml_json: str) -> None:
+def test_callback_methods_bypass_the_guard(
+    doc: HighlightBackendDocument, hml_json: str, atol: float
+) -> None:
     doc.cleanup_callback()
     doc.cleanup_callback()
 
     flips, global_flip, angle = get_alignment_ops_from_molblock(
-        doc.to_molblock(), doc.to_molblock(), atol=1e-5
+        doc.to_molblock(), doc.to_molblock(), atol=atol
     )
     doc.align_to_reference_callback(flips, global_flip, angle)
     doc.align_to_reference_callback(flips, global_flip, angle)

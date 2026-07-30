@@ -57,15 +57,13 @@ def _assert_angle_close(actual: float, expected: float, atol: float = 0.1) -> No
     assert min(diff, 180.0 - diff) < atol
 
 
-def test_get_2d_mol() -> None:
-    atol = 1e-5
+def test_get_2d_mol(atol: float) -> None:
     mol, molblock = _mol("CCC")
     assert get_2d_mol(molblock, atol=atol).GetNumAtoms() == 3  # from mol block string
     assert get_2d_mol(mol, atol=atol).GetNumAtoms() == 3  # from Chem.Mol directly
 
 
-def test_get_2d_mol_raises_when_invalid() -> None:
-    atol = 1e-5
+def test_get_2d_mol_raises_when_invalid(atol: float) -> None:
     with pytest.raises(ValueError, match="Invalid molblock"):
         get_2d_mol("this is not a molblock", atol=atol)
     with pytest.raises(ValueError, match="No coordinates available for molecule"):
@@ -101,8 +99,9 @@ def test_find_mcs(smiles_q: str, smiles_r: str, n_mcs: int) -> None:
         ("mol.mol", [(6, 6), (7, 6), (8, 6), (9, 8)]),
     ],
 )
-def test_flip_misaligned_bonds(q_file: str, allowed_flips: Sequence[tuple[int, int]]) -> None:
-    atol = 1e-5
+def test_flip_misaligned_bonds(
+    q_file: str, allowed_flips: Sequence[tuple[int, int]], atol: float
+) -> None:
     q_orig = from_fixture_molblock(q_file)
     q_orig = Chem.AddHs(q_orig, addCoords=True)
 
@@ -127,9 +126,8 @@ def test_flip_misaligned_bonds(q_file: str, allowed_flips: Sequence[tuple[int, i
     ["ethanol.mol", "3-methylbutanone.mol", "acetylic_acid.mol", "mol.mol"],
 )
 def test_get_alignment_flips_and_transform_without_alignment_flips(
-    angle_deg: float, flip_horizontal: bool, q_file: str
+    angle_deg: float, flip_horizontal: bool, q_file: str, atol: float
 ) -> None:
-    atol = 1e-5
     q_orig = from_fixture_molblock(q_file)
 
     q = apply_transform(q_orig, angle_deg, flip_horizontal=flip_horizontal, atol=atol)
@@ -183,7 +181,11 @@ def assert_all_alignments(
     ],
 )
 def test_get_alignment_flips_and_transform(
-    angle_deg: float, flip_horizontal: bool, q_file: str, allowed_flips: Sequence[tuple[int, int]]
+    angle_deg: float,
+    flip_horizontal: bool,
+    q_file: str,
+    allowed_flips: Sequence[tuple[int, int]],
+    atol: float,
 ) -> None:
     q_orig = from_fixture_molblock(q_file)
 
@@ -194,7 +196,7 @@ def test_get_alignment_flips_and_transform(
         global_flip, found_angle = parse_transform(transform, atol=atol)
         return found_flips, global_flip, found_angle
 
-    assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=1e-5)
+    assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=atol)
 
 
 # acetylic_acid.mol, 30 degrees fails somehow, so we jump with 14 degrees
@@ -214,6 +216,7 @@ def test_get_alignment_ops_from_molblock(
     flip_horizontal: bool,
     q_file: str,
     allowed_flips: Sequence[tuple[int, int]],
+    atol: float,
 ) -> None:
     q_orig = from_fixture_molblock(q_file)
 
@@ -224,7 +227,7 @@ def test_get_alignment_ops_from_molblock(
         q_orig_molblock = Chem.MolToMolBlock(q_orig, forceV3000=True)
         return get_alignment_ops_from_molblock(q_molblock, q_orig_molblock, atol=atol)
 
-    assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=1e-5)
+    assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=atol)
 
 
 def test_get_best_fit_angle_matching_ratio_needs_no_rotation() -> None:
@@ -246,22 +249,22 @@ def test_get_best_fit_angle_is_invariant_to_target_scale() -> None:
 
 
 @pytest.mark.parametrize("angle_step_deg", [15.0, 30.0, 45.0, 90.0])
-def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float) -> None:
+def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float, atol: float) -> None:
     # a real (non-rectangular) molecule, so the unconstrained optimum is generally
     # *not* on the grid -- this checks the search is actually restricted to it.
     q_orig = from_fixture_molblock("mol.mol")
     angle = get_best_fit_angle(q_orig, (2.0, 1.0), angle_step_deg=angle_step_deg)
     assert 0.0 <= angle < 180.0
     nearest_multiple = round(angle / angle_step_deg) * angle_step_deg
-    assert np.isclose(angle, nearest_multiple, atol=1e-9)
+    assert np.isclose(angle, nearest_multiple, atol=atol**2)
 
 
 @pytest.mark.parametrize("ratio", ["2:1", "2.5:1", " 2 : 1 "])
-def test_get_alignment_ops_from_molblock_with_bounding_box_ratio(ratio: str) -> None:
+def test_get_alignment_ops_from_molblock_with_bounding_box_ratio(ratio: str, atol: float) -> None:
     mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])  # 2 wide, 4 tall
     molblock = Chem.MolToMolBlock(mol, forceV3000=True)
 
-    flips, global_flip, angle = get_alignment_ops_from_molblock(molblock, ratio, atol=1e-5)
+    flips, global_flip, angle = get_alignment_ops_from_molblock(molblock, ratio, atol=atol)
 
     assert flips == []
     assert global_flip is False
@@ -269,13 +272,15 @@ def test_get_alignment_ops_from_molblock_with_bounding_box_ratio(ratio: str) -> 
 
 
 @pytest.mark.parametrize("ratio", ["2:0", "0:1", "0:0"])
-def test_get_alignment_ops_from_molblock_raises_for_non_positive_ratio(ratio: str) -> None:
+def test_get_alignment_ops_from_molblock_raises_for_non_positive_ratio(
+    ratio: str, atol: float
+) -> None:
     _, molblock = _mol("CCC")
     with pytest.raises(ValueError, match="Aspect ratio must be positive"):
-        get_alignment_ops_from_molblock(molblock, ratio, atol=1e-5)
+        get_alignment_ops_from_molblock(molblock, ratio, atol=atol)
 
 
-def test_get_alignment_ops_from_molblock_treats_non_ratio_string_as_molblock() -> None:
+def test_get_alignment_ops_from_molblock_treats_non_ratio_string_as_molblock(atol: float) -> None:
     _, molblock = _mol("CCC")
     with pytest.raises(ValueError, match="Invalid molblock"):
-        get_alignment_ops_from_molblock(molblock, "not a molblock", atol=1e-5)
+        get_alignment_ops_from_molblock(molblock, "not a molblock", atol=atol)

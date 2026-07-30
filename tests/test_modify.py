@@ -50,13 +50,13 @@ if TYPE_CHECKING:
     ids=["flip_horizontal_and_vertical", "flip_vertical_only", "flip_horizontal_only", "no_flips"],
 )
 def test_make_transform_flips_only(
-    flip_horizontal: bool, flip_vertical: bool, expected_matrix: NDArray[np.float64]
+    flip_horizontal: bool, flip_vertical: bool, expected_matrix: NDArray[np.float64], atol: float
 ) -> None:
     """Test standard axis inversions without any Z-axis rotations."""
     transform = make_transform(
         angle_deg=0.0, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
     )
-    np.testing.assert_allclose(transform, expected_matrix, atol=1e-7)
+    np.testing.assert_allclose(transform, expected_matrix, atol=atol**1.5)
 
 
 @pytest.mark.parametrize(
@@ -251,12 +251,13 @@ def test_make_transform_with_angles(
     flip_horizontal: bool,
     flip_vertical: bool,
     expected_matrix: NDArray[np.float64],
+    atol: float,
 ) -> None:
     """Test axis inversions stacked with Z-axis angular rotations."""
     result = make_transform(
         angle_deg=angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
     )
-    np.testing.assert_allclose(result, expected_matrix, atol=1e-7)
+    np.testing.assert_allclose(result, expected_matrix, atol=atol**1.5)
 
 
 @pytest.mark.parametrize(
@@ -441,10 +442,12 @@ def test_make_transform_with_angles(
     ],
 )
 def test_parse_transform(
-    matrix: NDArray[np.float64], expected_horizontal_flip: bool, expected_angle_deg: float
+    matrix: NDArray[np.float64],
+    expected_horizontal_flip: bool,
+    expected_angle_deg: float,
+    atol: float,
 ) -> None:
     """Test extracting angle and flips from transformation matrices."""
-    atol = 1e-5
     horizontal_flip, angle_deg = parse_transform(matrix, atol=atol)
 
     assert horizontal_flip == expected_horizontal_flip
@@ -489,9 +492,13 @@ def test_parse_transform(
     ],
 )
 def test_apply_transform(
-    q_file: str, r_file: str, angle_deg: float, flip_horizontal: bool, flip_vertical: bool
+    q_file: str,
+    r_file: str,
+    angle_deg: float,
+    flip_horizontal: bool,
+    flip_vertical: bool,
+    atol: float,
 ) -> None:
-    atol = 1e-5
     q_orig = from_fixture_molblock(q_file)
     r = from_fixture_molblock(r_file)
     assert not is_same_conformer(q_orig, r, atol=atol)
@@ -512,9 +519,10 @@ def test_apply_transform(
     [("origin", np.zeros(3)), ("previous", np.array([10.0, -4.0, 0.0])), ("none", None)],
 )
 def test_apply_transform_recenter_modes(
-    recenter: Literal["origin", "previous", "none"], expected_center: NDArray[np.float64] | None
+    recenter: Literal["origin", "previous", "none"],
+    expected_center: NDArray[np.float64] | None,
+    atol: float,
 ) -> None:
-    atol = 1e-5
     q_orig = from_fixture_molblock("ethanol.mol")
 
     move_molecule(q_orig, np.array([10.0, -4.0, 0.0]))
@@ -544,8 +552,9 @@ def test_apply_transform_recenter_modes(
         ("mol.mol", "mol_b86.mol", 8, 6),
     ],
 )
-def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) -> None:
-    atol = 1e-5
+def test_flip_bond(
+    q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int, atol: float
+) -> None:
     q_orig = from_fixture_molblock(q_file)
     r = from_fixture_molblock(r_file)
     assert not is_same_conformer(q_orig, r, atol=atol)
@@ -558,8 +567,8 @@ def test_flip_bond(q_file: str, r_file: str, bond_ix: int, anchor_atom_ix: int) 
     assert is_same_conformer(q, q_orig, atol=atol)
 
 
-def test_flip_bond_errors() -> None:
-    atol = 1e-5
+def test_flip_bond_errors(atol: float) -> None:
+
     benzenelike = Chem.MolFromSmiles("ClCc1ccccc1")
     Compute2DCoords(benzenelike)
     with pytest.raises(ValueError, match="Only single bonds can be flipped"):
@@ -585,8 +594,7 @@ def test_flip_bond_errors() -> None:
     "q_file",
     ["ethanol.mol", "3-methylbutanone.mol", "acetylic_acid.mol"],
 )
-def test_rotate_and_flip(angle_deg: float, q_file: str) -> None:
-    atol = 1e-5
+def test_rotate_and_flip(angle_deg: float, q_file: str, atol: float) -> None:
     q_orig = from_fixture_molblock(q_file)
 
     q = apply_transform(q_orig, angle_deg, atol=atol)

@@ -85,13 +85,13 @@ def test_from_bytes_unsupported_format(fmt: Literal["RXN", "CDX"]) -> None:
 
 
 @pytest.mark.parametrize(("r_file", "q_file_suffixes"), ALIGNMENTS)
-def test_align_to_reference(r_file: str, q_file_suffixes: Sequence[str]) -> None:
-    assert_align_to_reference(r_file, q_file_suffixes, RDKitDocument)
+def test_align_to_reference(r_file: str, q_file_suffixes: Sequence[str], atol: float) -> None:
+    assert_align_to_reference(r_file, q_file_suffixes, atol, RDKitDocument)
 
 
-def test_cleanup() -> None:
+def test_cleanup(atol: float) -> None:
     doc = RDKitDocument.from_string("c1cnccc1", "SMILES")
-    assert_cleanup(doc.to_molblock(), RDKitDocument)
+    assert_cleanup(doc.to_molblock(), atol, RDKitDocument)
 
 
 def test_kekulize() -> None:

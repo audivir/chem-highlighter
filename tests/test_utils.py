@@ -158,11 +158,9 @@ def test_get_high_precision_v3000(
         assert mse <= prec
 
 
-def test_is_same_conformer() -> None:
-    atol = 1e-5
-
+def test_is_same_conformer(atol: float) -> None:
     with pytest.raises(ValueError, match="Invalid molblocks"):
-        is_same_conformer("not a molblock", "also not a molblock", atol=1e-5)
+        is_same_conformer("not a molblock", "also not a molblock", atol=atol)
 
     ethanol = mol_from_smiles("CCO")
     rdDepictor.Compute2DCoords(ethanol)
@@ -176,8 +174,7 @@ def test_is_same_conformer() -> None:
         is_same_conformer(ethanol, propanol, atol=atol)
 
 
-def test_is_conformer_positions() -> None:
-    atol = 1e-5
+def test_is_conformer_positions(atol: float) -> None:
     ethanol = mol_from_smiles("CCO")
     rdDepictor.Compute2DCoords(ethanol)
 
@@ -191,13 +188,13 @@ def test_is_conformer_positions() -> None:
     assert not is_same_conformer(ethanol, ethanol_copy, atol=atol)
 
 
-def test_is_same_conformer_bond_mismatch() -> None:
+def test_is_same_conformer_bond_mismatch(atol: float) -> None:
     mol_a = mol_from_smiles("c1ccccc1")
     rdDepictor.Compute2DCoords(mol_a)
     mol_b = Chem.Mol(mol_a)
     mol_b.GetBondWithIdx(0).SetBondType(Chem.BondType.DOUBLE)
     assert Chem.MolToSmiles(mol_a) == Chem.MolToSmiles(mol_b)
-    assert not is_same_conformer(mol_a, mol_b, atol=1e-5)
+    assert not is_same_conformer(mol_a, mol_b, atol=atol)
 
 
 def test_move_molecule() -> None:
@@ -212,10 +209,10 @@ def test_move_molecule() -> None:
     np.testing.assert_allclose(conf.GetPositions(), original_positions + offset)
 
 
-def test_get_mol_center() -> None:
+def test_get_mol_center(atol: float) -> None:
     q = from_fixture_molblock("ethanol.mol")
 
-    np.testing.assert_allclose(get_mol_center(q), np.array([0.0, 0.0, 0.0]), atol=1e-5)
+    np.testing.assert_allclose(get_mol_center(q), np.array([0.0, 0.0, 0.0]), atol=atol)
 
 
 @pytest.mark.parametrize("new_center", [np.array([5.0, -3.0, 0.0]), np.array([0.0, 0.0, 0.0])])
@@ -226,9 +223,9 @@ def test_get_mol_center() -> None:
 def test_recenter_mol(
     new_center: NDArray[np.float64],
     prev_center: NDArray[np.float64] | None,
+    atol: float,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    atol = 1e-5
 
     mol = mol_from_smiles("CCO")
     rdDepictor.Compute2DCoords(mol)
@@ -244,20 +241,19 @@ def test_recenter_mol(
         assert "shifted" not in caplog.text
 
 
-def test_flatten_conformer_z() -> None:
+def test_flatten_conformer_z(atol: float) -> None:
     mol = mol_from_smiles("CCO")
     rdDepictor.Compute2DCoords(mol)
     conf = mol.GetConformer()
     pos = conf.GetAtomPosition(0)
     conf.SetAtomPosition(0, Point3D(pos.x, pos.y, 0.0005))
 
-    flatten_conformer_z(mol, conf, atol=1e-5)
+    flatten_conformer_z(mol, conf, atol=atol)
 
     assert conf.GetAtomPosition(0).z == 0.0
 
 
-def test_raise_if_3d_molecule() -> None:
-    atol = 1e-5
+def test_raise_if_3d_molecule(atol: float) -> None:
     mol = Chem.MolFromSmiles("c1ccccc1")
     rdDepictor.Compute2DCoords(mol)
     raise_if_3d_molecule(mol.GetConformer(), atol=atol)

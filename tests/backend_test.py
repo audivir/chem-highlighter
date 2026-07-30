@@ -90,7 +90,7 @@ def assert_export_mdl(
     assert backend.from_string(output, fmt).export_string("SMILES") == expected
 
 
-def assert_hp_mol_v3000(prec: float, backend: type[HighlightBackendDocumentT_co]) -> None:
+def assert_hp_mol_v3000(atol: float, backend: type[HighlightBackendDocumentT_co]) -> None:
     molblock = """\
 
      RDKit          2D
@@ -110,7 +110,7 @@ M  END
 """
     doc = backend.from_molblock(molblock)
 
-    assert is_same_conformer(doc.to_molblock(), molblock, prec)
+    assert is_same_conformer(doc.to_molblock(), molblock, atol)
 
     assert doc.from_molblock(doc.to_molblock()).to_molblock() == doc.to_molblock()
 
@@ -209,7 +209,9 @@ def assert_from_bytes_cdxml(
         backend.from_string(read_fixture("no_mol.cdxml"), "CDXML")
 
     if not allow_multiple:
-        with pytest.raises((ValueError, RuntimeError), match="Multiple molecules in CDXML"):
+        with pytest.raises(
+            (ValueError, RuntimeError), match="Invalid CDXML input: Multiple groups"
+        ):
             backend.from_string(read_fixture("two_mols.cdxml"), "CDXML")
 
 
@@ -224,7 +226,10 @@ def assert_from_bytes_unsupported_format(
 
 
 def assert_align_to_reference(
-    r_file: str, q_file_suffixes: Sequence[str], backend: type[HighlightBackendDocumentT_co]
+    r_file: str,
+    q_file_suffixes: Sequence[str],
+    atol: float,
+    backend: type[HighlightBackendDocumentT_co],
 ) -> None:
     r = from_fixture_molblock(r_file)
     for q_file_suffix in q_file_suffixes:
@@ -233,12 +238,10 @@ def assert_align_to_reference(
             doc = backend.from_mol(doc_mol)
             ref = backend.from_mol(ref_mol)
             doc.align_to_reference(ref.to_molblock())
-            assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=1e-5)
+            assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=atol)
 
 
-def assert_cleanup(expected: str, backend: type[HighlightBackendDocumentT_co]) -> None:
-    atol = 1e-5
-
+def assert_cleanup(expected: str, atol: float, backend: type[HighlightBackendDocumentT_co]) -> None:
     doc = backend.from_molblock(read_fixture("pyrimidine_dirty.mol"))
     assert not is_same_conformer(doc.to_molblock(), expected, atol=atol)
 
