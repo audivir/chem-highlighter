@@ -11,7 +11,7 @@ from rdkit import Chem
 from rdkit.Chem import rdDistGeom
 from rdkit.Chem.Draw import rdDepictor
 from rdkit.Geometry import Point3D
-from utils import FIXTURES, assert_mols_equal, from_fixture_molblock, get_conf_position_mae
+from utils import FIXTURES, assert_mols_equal, from_fixture_molblock, get_conf_position_mae, set_env
 
 from chem_highlighter.utils import (
     add_hydrogens,
@@ -22,9 +22,11 @@ from chem_highlighter.utils import (
     get_atom_position,
     get_atoms,
     get_bonds,
+    get_float_env,
     get_high_precision_v3000,
     get_mol_center,
     get_neighbors,
+    get_png_render_options,
     get_smiles_mol_pair,
     is_same_conformer,
     mol_from_smiles,
@@ -294,3 +296,27 @@ def test_get_ansi_color() -> None:
     palette = ["#ff0000", "#00ff00"]
     assert get_ansi_color(palette, 0) == "\033[38;2;255;0;0m"
     assert get_ansi_color(palette, 1) == "\033[38;2;0;255;0m"
+
+
+def test_get_float_env() -> None:
+    with set_env(TEST_ENV=None):
+        assert get_float_env("TEST_ENV") is None
+    with set_env(TEST_ENV="12.12"):
+        assert get_float_env("TEST_ENV") == 12.12
+    with set_env(TEST_ENV="not a float"):
+        assert get_float_env("TEST_ENV") is None
+
+
+def test_get_png_render_options() -> None:
+    with set_env(
+        CHEM_HIGHLIGHTER_PNG_TRANSPARENT=None,
+        CHEM_HIGHLIGHTER_PNG_WIDTH=None,
+        CHEM_HIGHLIGHTER_PNG_HEIGHT=None,
+    ):
+        assert get_png_render_options() == (False, None, None)
+    with set_env(
+        CHEM_HIGHLIGHTER_PNG_TRANSPARENT="1",
+        CHEM_HIGHLIGHTER_PNG_WIDTH="100",
+        CHEM_HIGHLIGHTER_PNG_HEIGHT="100",
+    ):
+        assert get_png_render_options() == (True, 100.0, 100.0)

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, rdDistGeom
+from rdkit.Geometry import Point3D
 from utils import from_fixture_molblock
 
 from chem_highlighter.align import (
@@ -17,6 +18,7 @@ from chem_highlighter.align import (
     get_2d_mol,
     get_alignment_flips_and_transform,
     get_alignment_ops_from_molblock,
+    get_best_fit_angle,
 )
 from chem_highlighter.modify import apply_transform, flip_bond, parse_transform
 from chem_highlighter.utils import is_same_conformer, mol_from_smiles
@@ -38,6 +40,21 @@ def _3d_mol(smiles: str) -> tuple[Chem.Mol, str]:
     mol = Chem.MolFromSmiles(smiles)
     rdDistGeom.EmbedMolecule(mol)
     return mol, Chem.MolToMolBlock(mol, kekulize=False, forceV3000=True)
+
+
+def _rect_mol(corners: Sequence[tuple[float, float]]) -> Chem.Mol:
+    """Build a (bond-free positioning of) a mol with one atom per (x, y) corner."""
+    mol, _ = _mol("C" * len(corners))
+    conf = mol.GetConformer()
+    for ix, (x, y) in enumerate(corners):
+        conf.SetAtomPosition(ix, Point3D(x, y, 0.0))
+    return mol
+
+
+def _assert_angle_close(actual: float, expected: float, atol: float = 0.1) -> None:
+    """Assert two angles (in degrees) match modulo the bounding box's 180 degree period."""
+    diff = abs(actual - expected) % 180.0
+    assert min(diff, 180.0 - diff) < atol
 
 
 def test_get_2d_mol() -> None:
@@ -208,3 +225,57 @@ def test_get_alignment_ops_from_molblock(
         return get_alignment_ops_from_molblock(q_molblock, q_orig_molblock, atol=atol)
 
     assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=1e-5)
+
+
+def test_get_best_fit_angle_matching_ratio_needs_no_rotation() -> None:
+    mol = _rect_mol([(-2.0, -1.0), (2.0, -1.0), (-2.0, 1.0), (2.0, 1.0)])  # 4 wide, 2 tall
+    _assert_angle_close(get_best_fit_angle(mol, (2.0, 1.0)), 0.0)
+
+
+def test_get_best_fit_angle_rotates_tall_shape_to_match_ratio() -> None:
+    # the rectangle above, rotated 90 degrees in `apply_transform`'s convention: 2 wide, 4 tall
+    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])
+    _assert_angle_close(get_best_fit_angle(mol, (2.0, 1.0)), 90.0)
+
+
+def test_get_best_fit_angle_is_invariant_to_target_scale() -> None:
+    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])
+    angle = get_best_fit_angle(mol, (2.0, 1.0))
+    scaled_angle = get_best_fit_angle(mol, (200.0, 100.0))
+    _assert_angle_close(angle, scaled_angle)
+
+
+@pytest.mark.parametrize("angle_step_deg", [15.0, 30.0, 45.0, 90.0])
+def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float) -> None:
+    # a real (non-rectangular) molecule, so the unconstrained optimum is generally
+    # *not* on the grid -- this checks the search is actually restricted to it.
+    q_orig = from_fixture_molblock("mol.mol")
+    angle = get_best_fit_angle(q_orig, (2.0, 1.0), angle_step_deg=angle_step_deg)
+    assert 0.0 <= angle < 180.0
+    nearest_multiple = round(angle / angle_step_deg) * angle_step_deg
+    assert np.isclose(angle, nearest_multiple, atol=1e-9)
+
+
+@pytest.mark.parametrize("ratio", ["2:1", "2.5:1", " 2 : 1 "])
+def test_get_alignment_ops_from_molblock_with_bounding_box_ratio(ratio: str) -> None:
+    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])  # 2 wide, 4 tall
+    molblock = Chem.MolToMolBlock(mol, forceV3000=True)
+
+    flips, global_flip, angle = get_alignment_ops_from_molblock(molblock, ratio, atol=1e-5)
+
+    assert flips == []
+    assert global_flip is False
+    _assert_angle_close(angle, 90.0)
+
+
+@pytest.mark.parametrize("ratio", ["2:0", "0:1", "0:0"])
+def test_get_alignment_ops_from_molblock_raises_for_non_positive_ratio(ratio: str) -> None:
+    _, molblock = _mol("CCC")
+    with pytest.raises(ValueError, match="Aspect ratio must be positive"):
+        get_alignment_ops_from_molblock(molblock, ratio, atol=1e-5)
+
+
+def test_get_alignment_ops_from_molblock_treats_non_ratio_string_as_molblock() -> None:
+    _, molblock = _mol("CCC")
+    with pytest.raises(ValueError, match="Invalid molblock"):
+        get_alignment_ops_from_molblock(molblock, "not a molblock", atol=1e-5)

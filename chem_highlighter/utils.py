@@ -24,38 +24,6 @@ GREEN_COLOR = "\033[92m"
 RESET_COLOR = "\033[0m"
 
 
-def _float_env(name: str) -> float | None:
-    value = os.environ.get(name)
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
-def get_png_render_options() -> tuple[bool, float | None, float | None]:
-    """Return `(transparent, width, height)` for PNG rendering.
-
-    Read from CHEM_HIGHLIGHTER_PNG_TRANSPARENT/CHEM_HIGHLIGHTER_PNG_WIDTH/
-    CHEM_HIGHLIGHTER_PNG_HEIGHT, so every backend (other implementations' own equivalent, this
-    package's RDKit backend) renders PNGs to the same bounding box from the same knobs, with no
-    per-call channel for it (neither `export(fmt)` nor other backends' own export requests carry
-    per-call arguments). `width`/`height` are `None` when unset -- callers should then fall back
-    to their own natural/unbounded size (RDKit's `-1, -1`; another backend's own SVG size) rather
-    than a hardcoded default, so an unconfigured install renders the same as before this existed.
-    If only one of width/height is set, the other mirrors it (a square bound).
-    """
-    transparent = os.environ.get("CHEM_HIGHLIGHTER_PNG_TRANSPARENT") == "true"
-    width = _float_env("CHEM_HIGHLIGHTER_PNG_WIDTH")
-    height = _float_env("CHEM_HIGHLIGHTER_PNG_HEIGHT")
-    if width is None:
-        width = height
-    if height is None:
-        height = width
-    return transparent, width, height
-
-
 class SmilesMolPair(NamedTuple):
     """Tuple to hold SMILES string and RDKit molecule."""
 
@@ -130,7 +98,7 @@ def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
 
     mol_block = Chem.MolToMolBlock(mol, kekulize=kekulize, forceV3000=True)
 
-    if mol.GetNumConformers() == 0:
+    if mol.GetNumConformers() == 0:  # pragma: no cover
         return mol_block
 
     conf = mol.GetConformer()
@@ -230,8 +198,8 @@ def is_same_conformer(  # noqa: C901,PLR0912
 
     max_dist = max(cost_matrix[rows, cols])
     if max_dist >= atol:
-        if not quiet:
-            logger.error("Positions off by %f", max_dist)
+        if not quiet:  # pragma: no branch
+            logger.error("Positions off by %e", max_dist)
         return False
 
     # Unreachable in practice: the 1e7 mismatch penalty above means the optimal
@@ -242,7 +210,7 @@ def is_same_conformer(  # noqa: C901,PLR0912
         atom_b = mol_b.GetAtomWithIdx(exp_idx)
 
         if not are_atoms_equal(atom_a, atom_b):  # pragma: no cover
-            if not quiet:
+            if not quiet:  # pragma: no branch
                 logger.error("Non-identical atom data")
             return False
 
@@ -254,12 +222,12 @@ def is_same_conformer(  # noqa: C901,PLR0912
         # guarantees a graph-isomorphic mapping exists between mol_a and mol_b.
         other: Chem.Bond | None = mol_a.GetBondBetweenAtoms(a1, a2)
         if not other:  # pragma: no cover
-            if not quiet:
+            if not quiet:  # pragma: no branch
                 logger.error("No bond found")
             return False
 
         if not are_bonds_equal(bond, other):
-            if not quiet:
+            if not quiet:  # pragma: no branch
                 logger.error("Non-identical bond data")
             return False
 
@@ -368,3 +336,26 @@ def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
     hex_color = palette[group_ix]
     r, g, b = [int(x * 255) for x in mpl.colors.hex2color(hex_color)]
     return f"\033[38;2;{r};{g};{b}m"
+
+
+def get_float_env(name: str) -> float | None:
+    """Get a float environment variable."""
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def get_png_render_options() -> tuple[bool, float | None, float | None]:
+    """Return `(transparent, width, height)` for PNG rendering from environment."""
+    transparent = bool(os.environ.get("CHEM_HIGHLIGHTER_PNG_TRANSPARENT"))
+    width = get_float_env("CHEM_HIGHLIGHTER_PNG_WIDTH")
+    height = get_float_env("CHEM_HIGHLIGHTER_PNG_HEIGHT")
+    if width is None:
+        width = height
+    if height is None:
+        height = width
+    return transparent, width, height

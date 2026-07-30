@@ -23,7 +23,7 @@ class SmilesTokenMap(NamedTuple):
 def map_smiles_tokens(  # noqa: PLR0915
     smiles: str, mol: Chem.Mol, tokenize_fn: Callable[[str], list[str]] | None = None
 ) -> list[SmilesTokenMap]:
-    """Maps each tokenacter in a SMILES string to its structural role and RDKit index.
+    """Map each token in a SMILES string to its structural role and RDKit index.
 
     Assumes `smiles` was generated via `Chem.MolToSmiles(..., allBondsExplicit=True)`.
     """
@@ -52,6 +52,8 @@ def map_smiles_tokens(  # noqa: PLR0915
             orig_atom_ix = atom_order[atom_ix]
             current_atom_index = orig_atom_ix
 
+            # TODO(tihoph): if "[", "n", "H", "]" are single tokens these will fail downstream,
+            # if not handled properly as its stored as "[nH]", same for "C", "l" and "Cl"
             token_maps.append(SmilesTokenMap(token_chars, "atom", "atom", orig_atom_ix))
 
             atom_ix += 1
@@ -68,25 +70,26 @@ def map_smiles_tokens(  # noqa: PLR0915
 
         # branches
         elif token == "(":
-            # Branch opens: Belongs to the FIRST atom INSIDE the branch.
+            # branch opens: belongs to the FIRST atom INSIDE the branch.
             # atom_ix hasn't incremented yet, so atom_order[atom_ix] is the branch head.
             branch_head_atom = atom_order[atom_ix]
             token_maps.append(SmilesTokenMap(token, "par", "atom", branch_head_atom))
 
-            # We still need to track the parent so the main chain knows where to resume
+            # track the parent so the main chain knows where to resume
             branch_stack.append(current_atom_index)
             ix += 1
 
         elif token == ")":
-            # Branch closes: Belongs to the LAST atom inside the branch (the current one).
+            # branch closes: belongs to the LAST atom inside the branch (the current one).
             token_maps.append(SmilesTokenMap(token, "par", "atom", current_atom_index))
 
-            # Pop the stack to revert the main chain back to the parent atom
+            # pop the stack to revert the main chain back to the parent atom
             current_atom_index = branch_stack.pop() if branch_stack else current_atom_index
             ix += 1
 
         # ring closures "%", "1", "2"
         elif token == "%":
+            # TODO(tihoph): same problem as above, depending on tokenizer
             token_chars = "".join(tokens[ix : ix + 3])
             token_maps.append(SmilesTokenMap(token_chars, "ring", "atom", current_atom_index))
             ix += 3
@@ -108,6 +111,7 @@ def map_smiles_tokens(  # noqa: PLR0915
         else:
             token_chars = token
             n_tokens = 1
+            # TODO(tihoph): same problem as above, depending on tokenizer
             if ix + 1 < len(tokens) and "".join(tokens[ix : ix + 2]) in {"Cl", "Br"}:
                 token_chars = "".join(tokens[ix : ix + 2])
                 n_tokens = 2

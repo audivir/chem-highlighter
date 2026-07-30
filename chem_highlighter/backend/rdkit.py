@@ -77,6 +77,7 @@ def highlight_rings(
     # a hack to set the molecule scale
     highlight_without_rings(drawer, hml, mol)
     drawer.ClearDrawing()
+    # TODO(tihoph): assert the drawing is actually clean, sometimes with the drawing twice
     conf = mol.GetConformer()
     for ring_ix, group_ix in hml.highlighted_rings.items():
         color = hml.palette[group_ix]
@@ -111,11 +112,13 @@ def draw_mol(
         drawer = Draw.MolDraw2DSVG(-1, -1)
         auto_fit = False
 
-    clear_background = True
-    if not opts:
+    if not opts:  # pragma: no branch
         opts = drawer.drawOptions()
         if auto_fit:
-            # A fixed canvas size auto-fits/centers the molecule to it (unlike ACS1996 mode,
+            # TODO(tihoph): but i want to still have the ACS1996 look,
+            # maybe creating svg and then rendering to png? keeping aspect ratio intact
+
+            # a fixed canvas size auto-fits/centers the molecule to it (unlike ACS1996 mode,
             # which draws at a fixed absolute scale regardless of canvas size), matching the
             # bounding-box behavior of another backend's resvg-based PNG renderer. Only used
             # once a size is actually configured -- unconfigured, PNG keeps its previous -1,-1
@@ -125,23 +128,19 @@ def draw_mol(
             mean_bond_length = Draw.MeanBondLength(mol) or 1.0
             Draw.SetACS1996Mode(opts, mean_bond_length)
             opts.prepareMolsBeforeDrawing = False  # type: ignore[assignment]
-    else:  # pragma: no cover
-        clear_background = opts.clearBackground
-    opts.clearBackground = True  # type: ignore[assignment]
-    if output == "png" and transparent:
-        opts.setBackgroundColour((1, 1, 1, 0))
-    drawer.SetDrawOptions(opts)
+
+    if output == "svg" or transparent:
+        opts.clearBackground = True  # type: ignore[assignment]
+        opts.setBackgroundColour((0.0, 0.0, 0.0, 0.0))
 
     if fill_rings:  # pragma: no branch
         # if we are filling rings, go ahead and do that first so that we draw
         # the molecule on top of the filled rings
         highlight_rings(drawer, hml, mol)
-        if not clear_background:  # pragma: no cover
-            opts.clearBackground = False  # type: ignore[assignment]
 
     highlight_without_rings(drawer, hml, mol)
 
-    if output == "svg":
+    if isinstance(drawer, Draw.MolDraw2DSVG):
         svg = get_rdkit_svg(drawer)
         tree = fix_svg(svg)
         # svg = add_legend(svg, legend, line_breaks=False) # noqa: ERA001

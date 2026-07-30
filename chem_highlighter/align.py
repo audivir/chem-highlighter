@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, TypeAlias
 
 from chem_highlighter.modify import parse_transform
@@ -26,6 +27,11 @@ logger = logging.getLogger(__name__)
 
 Flip: TypeAlias = tuple[int, int]
 Flips: TypeAlias = list[Flip]
+
+RATIO_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)")
+
+# A clean 2D depiction draws every bond at a multiple of this angle (0, 30, 60, ...)
+BOND_ANGLE_STEP_DEG = 30.0
 
 
 def get_2d_mol(mol_or_molblock: Chem.Mol | str, atol: float) -> Chem.Mol:
@@ -230,10 +236,51 @@ def get_alignment_flips_and_transform(
     return flips, transform
 
 
+def parse_possible_ratio(reference: str) -> tuple[float, float] | None:
+    """Parse a reference to a bounding box aspect ratio, if possible (e.g. "2:1"), else None.
+
+    Raises:
+        ValueError: If `reference` is shaped like a ratio string but isn't positive.
+    """
+    match = RATIO_PATTERN.fullmatch(reference.strip())
+    if not match:
+        return None
+
+    width, height = float(match.group(1)), float(match.group(2))
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Aspect ratio must be positive: {reference!r}")
+    return width, height
+
+
+def get_best_fit_angle(
+    mol: Chem.Mol, ratio: tuple[float, float], angle_step_deg: float = BOND_ANGLE_STEP_DEG
+) -> float:
+    """Find the rotation angle that best fits `mol`'s 2D bounding box into a `ratio` box."""
+    import numpy as np
+
+    positions = mol.GetConformer().GetPositions()[:, :2]
+    target_w, target_h = ratio
+
+    def fit_cost(angle_deg: float) -> float:
+        theta = np.radians(angle_deg)
+        c, s = np.cos(theta), np.sin(theta)
+        rotated_x = positions[:, 0] * c + positions[:, 1] * s
+        rotated_y = -positions[:, 0] * s + positions[:, 1] * c
+        width = rotated_x.max() - rotated_x.min()
+        height = rotated_y.max() - rotated_y.min()
+        return float(max(width / target_w, height / target_h))
+
+    candidates = np.arange(0.0, 180.0, angle_step_deg)
+    costs = [fit_cost(float(angle)) for angle in candidates]
+    return float(candidates[int(np.argmin(costs))])
+
+
 def get_alignment_ops_from_molblock(
-    query_molblock: str, reference_molblock: str, atol: float
+    query_molblock: str, reference: str, atol: float
 ) -> tuple[list[tuple[int, int]], bool, float]:
-    """Finds the necessary flips and rotation angle to align two molecules as Mol blocks.
+    """Finds the necessary flips and rotation angle to align a molecule to a reference.
+
+    The reference is either a molblock or a bounding box aspect ratio (e.g. "2:1").
 
     Returns:
         A tuple with a list of necessary flips around rotatable bonds
@@ -242,7 +289,12 @@ def get_alignment_ops_from_molblock(
         and the rotation angle based on the reference molecule in degrees.
     """
     query = get_2d_mol(query_molblock, atol=atol)
-    reference = get_2d_mol(reference_molblock, atol=atol)
-    flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
+
+    ratio = parse_possible_ratio(reference)
+    if ratio is not None:
+        return [], False, get_best_fit_angle(query, ratio)
+
+    reference_mol = get_2d_mol(reference, atol=atol)
+    flips, transform = get_alignment_flips_and_transform(query, reference_mol, atol=atol)
     global_flip, angle = parse_transform(transform, atol=atol)
     return flips, global_flip, angle

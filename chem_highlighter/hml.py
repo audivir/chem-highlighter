@@ -148,7 +148,7 @@ class HighlightBackendDocument(ABC):
 
     @final
     def align_to_reference(self, reference: str) -> Self:
-        """Align the underlying molecule to a reference molecule as molblock."""
+        """Align the molecule to a reference molblock or bounding box ratio (e.g. "2:1")."""
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
             raise ValueError("Already aligned")
@@ -180,7 +180,7 @@ class HighlightBackendDocument(ABC):
             ):
                 break
             prev_cleans.append(curr_clean)
-        else:
+        else:  # pragma: no cover
             raise ValueError("Cleanup does not converge")
 
         self.kekulize(kekulized)
@@ -210,10 +210,7 @@ class HighlightBackendDocument(ABC):
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if hydrogens_hidden:
             raise ValueError("Hydrogen display already set")
-        # self.kekulize(True)
         self.hide_hydrogens_callback()
-        #if not kekulized:
-        #    self.kekulize(False)
         self.set_edit_state(kekulized, aligned, True)
         return self
 

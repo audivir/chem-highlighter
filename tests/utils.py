@@ -2,19 +2,66 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+import struct
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+from PIL import Image
 from rdkit import Chem
 
 if TYPE_CHECKING:
+    from collections.abc import Generator  # noqa: I001,RUF100
+
     from _pytest.mark import ParameterSet
+
     from chem_highlighter.hml import HighlightBackendDocument
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FIXTURES_ORDER = [FIXTURES]
+
+
+def png_dimensions(data: bytes) -> tuple[int, int]:
+    """Read the (width, height) out of a PNG's IHDR chunk."""
+    width, height = struct.unpack(">II", data[16:24])
+    return width, height
+
+
+def png_has_transparency(png_bytes: bytes) -> bool:
+    """Whether the PNG data contains any semi-transparent or fully transparent pixels."""
+    img = Image.open(BytesIO(png_bytes))
+
+    if img.mode not in ("RGBA", "LA") and "transparency" not in img.info:
+        return False
+    alpha_channel = img.convert("RGBA").getchannel("A")
+
+    min_alpha, _ = alpha_channel.getextrema()
+    if isinstance(min_alpha, int | float):
+        return min_alpha < 255
+    raise TypeError("Unexpected alpha value")  # pragma: no cover
+
+
+@contextlib.contextmanager
+def set_env(**variables: str | None) -> Generator[None]:
+    """Temporarily set env vars, restoring (or unsetting) the previous values afterward."""
+
+    def _set_env(**inner_variables: str | None) -> None:
+        for name, value in inner_variables.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+    previous = {name: os.environ.get(name) for name in variables}
+    _set_env(**variables)
+    try:
+        yield
+    finally:
+        _set_env(**previous)
 
 
 def from_fixture_molblock(fixture_file: str) -> Chem.Mol:
@@ -24,12 +71,12 @@ def from_fixture_molblock(fixture_file: str) -> Chem.Mol:
 def read_fixture(fixture_file: str) -> str:
     for directory in FIXTURES_ORDER:
         path = directory / fixture_file
-        if path.exists():
+        if path.exists():  # pragma: no branch
             return path.read_text()
-    raise ValueError(f"Fixture {fixture_file} not found")
+    raise ValueError(f"Fixture {fixture_file} not found")  # pragma: no cover
 
 
-def xfail_param(value: object, reason: str) -> ParameterSet:
+def xfail_param(value: object, reason: str) -> ParameterSet:  # pragma: no cover
     return pytest.param(value, marks=[pytest.mark.xfail(reason=reason)])
 
 
@@ -71,7 +118,7 @@ def assert_benzene_kekulized(doc: HighlightBackendDocument, kekulized: bool) -> 
     bond_type_codes = extract_bond_codes(doc.to_molblock())
     kekule_bonds = [[1 if i % 2 == modulo else 2 for i in range(6)] for modulo in (0, 1)]
 
-    if mol := getattr(doc, "mol", None):  # noqa: SIM102
+    if mol := getattr(doc, "mol", None):  # noqa: SIM102 # pragma: no cover
         if isinstance(mol, Chem.Mol):
             ring_bonds = [mol.GetBondBetweenAtoms(i, (i + 1) % 6) for i in range(6)]
             assert all(bond.GetIsAromatic() for bond in ring_bonds)
@@ -90,7 +137,7 @@ def get_conf_position_mae(mol: Chem.Mol, molblock: str) -> float:
     return float(np.mean(np.abs(new_pos - mol_pos)))
 
 
-def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:
+def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:  # pragma: no cover
     import tempfile
     import webbrowser
     from pathlib import Path

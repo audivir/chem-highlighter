@@ -1,14 +1,22 @@
 """Backend-independent test functions."""
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001,RUF100
 
-import contextlib
-import os
-import struct
 from typing import TYPE_CHECKING, Literal
 
 import msgspec
 import pytest
+from utils import (
+    assert_benzene_kekulized,
+    assert_mols_equal,
+    from_fixture_molblock,
+    mol_from_explicit_smiles,
+    png_dimensions,
+    png_has_transparency,
+    read_fixture,
+    set_env,
+)
+
 from chem_highlighter.backend.rdkit import RDKitDocument
 from chem_highlighter.hml import (
     HML,
@@ -19,16 +27,9 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.utils import is_same_conformer, mol_to_smiles
-from utils import (
-    assert_benzene_kekulized,
-    assert_mols_equal,
-    from_fixture_molblock,
-    mol_from_explicit_smiles,
-    read_fixture,
-)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Sequence
 
 ALIGNMENTS = [
     ("3-methylbutanone.mol", ["_44cw", "_b12", "_bf", "_hf", "_vf"]),
@@ -89,25 +90,29 @@ def assert_export_mdl(
     assert backend.from_string(output, fmt).export_string("SMILES") == expected
 
 
-def png_dimensions(data: bytes) -> tuple[int, int]:
-    """Read the (width, height) out of a PNG's IHDR chunk."""
-    width, height = struct.unpack(">II", data[16:24])
-    return width, height
+def assert_hp_mol_v3000(prec: float, backend: type[HighlightBackendDocumentT_co]) -> None:
+    molblock = """\
 
+     RDKit          2D
 
-@contextlib.contextmanager
-def _env(**variables: str) -> Iterator[None]:
-    """Temporarily set env vars, restoring (or unsetting) the previous values afterward."""
-    previous = {name: os.environ.get(name) for name in variables}
-    os.environ.update(variables)
-    try:
-        yield
-    finally:
-        for name, value in previous.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
+  0  0  0  0  0  0  0  0  0  0999 V3000
+M  V30 BEGIN CTAB
+M  V30 COUNTS 2 1 0 0 0
+M  V30 BEGIN ATOM
+M  V30 1 C -0.12727200 -0.39237500 0.00000000 0
+M  V30 2 C 0.12727200 0.39237500 0.00000000 0
+M  V30 END ATOM
+M  V30 BEGIN BOND
+M  V30 1 1 1 2
+M  V30 END BOND
+M  V30 END CTAB
+M  END
+"""
+    doc = backend.from_molblock(molblock)
+
+    assert is_same_conformer(doc.to_molblock(), molblock, prec)
+
+    assert doc.from_molblock(doc.to_molblock()).to_molblock() == doc.to_molblock()
 
 
 def assert_export_images(
@@ -126,19 +131,16 @@ def assert_export_images(
         assert b"EPSF-1.2" in output
 
 
-def assert_export_png_respects_configured_size(
+def assert_export_png_respects_environment(
+    transparent: bool,
     backend: type[HighlightBackendDocumentT_co],
 ) -> None:
-    """Confirm CHEM_HIGHLIGHTER_PNG_WIDTH/HEIGHT actually reach the PNG renderer.
-
-    Both backends bound the rendered PNG to the configured box, but not identically: the other
-    backend (via resvg) shrinks the canvas itself to the molecule's aspect ratio within the box,
-    while RDKit draws a fixed canvas at exactly the configured size and centers the molecule in
-    it. So this only asserts the shared contract -- neither dimension exceeds what was
-    configured, and the render isn't silently falling back to something tiny -- not exact
-    equality.
-    """
-    with _env(CHEM_HIGHLIGHTER_PNG_WIDTH="137", CHEM_HIGHLIGHTER_PNG_HEIGHT="141"):
+    """Confirm CHEM_HIGHLIGHTER_PNG_WIDTH/HEIGHT actually reach the PNG renderer."""
+    with set_env(
+        CHEM_HIGHLIGHTER_PNG_WIDTH="137",
+        CHEM_HIGHLIGHTER_PNG_HEIGHT="141",
+        CHEM_HIGHLIGHTER_PNG_TRANSPARENT="1" if transparent else None,
+    ):
         output = create_doc("c1ccccc1", backend).export("PNG")
     width, height = png_dimensions(output)
     assert width <= 137, f"width {width} exceeds the configured bound of 137"
@@ -146,6 +148,7 @@ def assert_export_png_respects_configured_size(
     assert max(width, height) >= 100, (
         f"expected a size close to the configured bound, got {width}x{height}"
     )
+    assert png_has_transparency(output) == transparent
 
 
 def assert_export(
@@ -163,6 +166,8 @@ def assert_export(
         assert output == b"InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H"
     elif fmt == "InChIKey":
         assert output == b"UHOVQNZJYSORNB-UHFFFAOYSA-N"
+    else:  # pragma: no cover
+        raise ValueError("Unexpected format")
 
 
 def assert_export_unsupported_format(
