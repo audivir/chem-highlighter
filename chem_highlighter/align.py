@@ -201,6 +201,17 @@ def get_alignment_flips_and_transform(
     from rdkit import Chem
     from rdkit.Chem import rdMolAlign
 
+    from chem_highlighter.utils import is_same_conformer
+
+    # `query` may already be positioned exactly like `reference` (e.g. aligning a
+    # molecule to a molblock export of itself). Kabsch below has no preference between
+    # the identity transform and any symmetry-equivalent non-identity one that achieves
+    # the same (zero) RMSD, so a molecule with any point-group symmetry can otherwise
+    # come back rotated/mirrored instead of untouched. Short-circuit before that can
+    # happen, rather than trying to bias the solver towards the identity after the fact.
+    if is_same_conformer(query, reference, atol=atol, quiet=True):
+        return [], np.eye(4)
+
     bare_mcs_match = find_mcs(query, reference)
 
     heavy_bare_mcs_match = {

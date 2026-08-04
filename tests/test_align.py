@@ -118,6 +118,32 @@ def test_flip_misaligned_bonds(
             assert is_same_conformer(q, q_orig, atol=atol)
 
 
+@pytest.mark.parametrize(
+    "smiles",
+    [
+        "c1ccccc1",  # benzene: D6h symmetry, plenty of zero-RMSD non-identity superpositions
+        "CCO",  # ethanol: no symmetry, sanity check the same code path on an asymmetric case
+    ],
+)
+def test_get_alignment_flips_and_transform_self_alignment_is_a_no_op(
+    smiles: str, atol: float
+) -> None:
+    """A symmetric molecule aligned to a molblock export of itself must not rotate/mirror.
+
+    Reproduces the reported `--reference "same_molecule.mol"` bug: Kabsch has no
+    preference between the identity transform and a symmetry-equivalent non-identity one
+    when both achieve the same (zero) RMSD.
+    """
+    _, molblock = _mol(smiles)
+    query = get_2d_mol(molblock, atol=atol)
+    reference = get_2d_mol(molblock, atol=atol)
+
+    flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
+
+    assert flips == []
+    np.testing.assert_allclose(transform, np.eye(4), atol=atol)
+
+
 # acetylic_acid.mol, 30 degrees fails somehow, so we jump with 14 degrees
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 14)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
