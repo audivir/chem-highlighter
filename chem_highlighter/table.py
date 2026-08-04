@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 import msgspec
 from typing_extensions import NotRequired
 
-from chem_highlighter import HighlightBackendDocument, RDKitDocument
+from chem_highlighter import HighlightBackendMolecule, RDKitMolecule
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -129,7 +129,7 @@ def create_visualization_table(
     vis_mol_col: str = "Molecule",
     reference: int | Chem.Mol | None = None,
     clean_reference: bool = True,
-    backend: type[HighlightBackendDocument] = RDKitDocument,
+    backend: type[HighlightBackendMolecule] = RDKitMolecule,
 ) -> str:
     """Render a Polars DataFrame as an AG Grid HTML table with molecule SVGs.
 
@@ -157,7 +157,7 @@ def create_visualization_table(
     import polars as pl
     from rdkit import Chem
 
-    reference_doc: HighlightBackendDocument | None = None
+    reference_doc: HighlightBackendMolecule | None = None
     reference_molblock: str | None = None
 
     if isinstance(reference, int):

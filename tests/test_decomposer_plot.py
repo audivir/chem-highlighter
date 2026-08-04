@@ -7,7 +7,7 @@ from matplotlib.figure import Figure
 from rdkit import Chem
 from utils import assert_mols_equal
 
-from chem_highlighter.backend.rdkit import RDKitDocument
+from chem_highlighter.backend.rdkit import RDKitMolecule
 from chem_highlighter.decomposer.core import Core, DecomposedMol
 from chem_highlighter.decomposer.plot import (
     _change_map_atoms,
@@ -205,7 +205,7 @@ def test_fix_core_equivs() -> None:
 
 def test_replace_atom() -> None:
     mol = Chem.MolFromSmiles("Ic1ccccc1")
-    doc = RDKitDocument.from_mol(mol)
+    doc = RDKitMolecule.from_mol(mol)
     svg = doc.to_svg()
     decomposed = DecomposedMol(qcore=mol, complete=mol, groups={"Core": mol})
     result = replace_atom(svg, decomposed, symbol="I")

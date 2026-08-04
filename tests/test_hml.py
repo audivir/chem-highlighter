@@ -7,8 +7,8 @@ import pytest
 from utils import assert_benzene_kekulized
 
 from chem_highlighter.align import get_alignment_ops_from_molblock
-from chem_highlighter.backend.rdkit import RDKitDocument
-from chem_highlighter.hml import HML, HighlightBackendDocument
+from chem_highlighter.backend.rdkit import RDKitMolecule
+from chem_highlighter.hml import HML, HighlightBackendMolecule
 from chem_highlighter.utils import mol_from_smiles
 
 
@@ -60,14 +60,14 @@ def test_get_rgba() -> None:
 
 
 def test_to_hmol_json_without_hml() -> None:
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
+    doc = RDKitMolecule.from_mol(mol_from_smiles("CCO"))
     assert doc.get_hml_json() is None
     json_str = doc.to_hmol_json()
     decoded = msgspec.json.decode(json_str)
     assert b'"mol"' in msgspec.json.encode(decoded)
 
 
-def test_to_hmol_json_with_hml(doc: HighlightBackendDocument, hml_json: str) -> None:
+def test_to_hmol_json_with_hml(doc: HighlightBackendMolecule, hml_json: str) -> None:
     doc.highlight_from_json(hml_json, False)
     found_hml_json = doc.get_hml_json()
     assert found_hml_json is not None
@@ -80,7 +80,7 @@ def test_to_hmol_json_with_hml(doc: HighlightBackendDocument, hml_json: str) -> 
 
 @pytest.mark.parametrize("hide_hydrogens", [False, True])
 def test_highlight_from_json(
-    hide_hydrogens: bool, doc: HighlightBackendDocument, hml_json: str
+    hide_hydrogens: bool, doc: HighlightBackendMolecule, hml_json: str
 ) -> None:
     doc.highlight_from_json(hml_json, hide_hydrogens)
     assert doc.get_edit_state() == (True, False, hide_hydrogens)
@@ -91,38 +91,38 @@ def test_highlight_from_json(
 
 
 def test_cleanup_succeeds() -> None:
-    doc = RDKitDocument.from_mol(mol_from_smiles("CCO"))
+    doc = RDKitMolecule.from_mol(mol_from_smiles("CCO"))
     doc.cleanup()
     assert doc.get_edit_state() == (True, False, False)
 
 
-def test_to_svg(doc: HighlightBackendDocument) -> None:
+def test_to_svg(doc: HighlightBackendMolecule) -> None:
     assert "<svg" in doc.to_svg()
 
 
-def test_to_png(doc: HighlightBackendDocument) -> None:
+def test_to_png(doc: HighlightBackendMolecule) -> None:
     assert doc.to_png()[:4] == b"\x89PNG"
 
 
 @pytest.mark.parametrize("canonical", [True, False])
-def test_to_console_default_implementation(canonical: bool, doc: HighlightBackendDocument) -> None:
-    # RDKitDocument overrides `to_console`; call the base implementation directly.
-    assert HighlightBackendDocument.to_console(doc, canonical=canonical)
+def test_to_console_default_implementation(canonical: bool, doc: HighlightBackendMolecule) -> None:
+    # RDKitMolecule overrides `to_console`; call the base implementation directly.
+    assert HighlightBackendMolecule.to_console(doc, canonical=canonical)
 
 
-def test_align_to_reference_raises_when_already_aligned(doc: HighlightBackendDocument) -> None:
+def test_align_to_reference_raises_when_already_aligned(doc: HighlightBackendMolecule) -> None:
     doc.align_to_reference(doc.to_molblock())
     with pytest.raises(ValueError, match="Already aligned"):
         doc.align_to_reference(doc.to_molblock())
 
 
-def test_cleanup_raises_when_already_aligned(doc: HighlightBackendDocument) -> None:
+def test_cleanup_raises_when_already_aligned(doc: HighlightBackendMolecule) -> None:
     doc.align_to_reference(doc.to_molblock())
     with pytest.raises(ValueError, match="Cleanup after alignment not supported"):
         doc.cleanup()
 
 
-def test_cleanup_after_kekulize_reapplies_kekulize_state(doc: HighlightBackendDocument) -> None:
+def test_cleanup_after_kekulize_reapplies_kekulize_state(doc: HighlightBackendMolecule) -> None:
     assert_benzene_kekulized(doc, True)
     doc.kekulize(False)
     assert_benzene_kekulized(doc, False)
@@ -130,14 +130,14 @@ def test_cleanup_after_kekulize_reapplies_kekulize_state(doc: HighlightBackendDo
     assert_benzene_kekulized(doc, False)
 
 
-def test_hide_hydrogens_raises_when_already_set(doc: HighlightBackendDocument) -> None:
+def test_hide_hydrogens_raises_when_already_set(doc: HighlightBackendMolecule) -> None:
     doc.hide_hydrogens()
     with pytest.raises(ValueError, match="Hydrogen display already set"):
         doc.hide_hydrogens()
 
 
 def test_hide_hydrogens_raises_after_highlighting(
-    doc: HighlightBackendDocument, hml_json: str
+    doc: HighlightBackendMolecule, hml_json: str
 ) -> None:
     doc.highlight_from_json(hml_json, False)
     with pytest.raises(
@@ -147,7 +147,7 @@ def test_hide_hydrogens_raises_after_highlighting(
 
 
 def test_highlight_from_json_raises_when_already_highlighted(
-    doc: HighlightBackendDocument, hml_json: str
+    doc: HighlightBackendMolecule, hml_json: str
 ) -> None:
     doc.highlight_from_json(hml_json, False)
     with pytest.raises(ValueError, match="Already highlighted"):
@@ -155,7 +155,7 @@ def test_highlight_from_json_raises_when_already_highlighted(
 
 
 def test_highlight_from_json_raises_after_hydrogens_hidden(
-    doc: HighlightBackendDocument, hml_json: str
+    doc: HighlightBackendMolecule, hml_json: str
 ) -> None:
     doc.hide_hydrogens()
 
@@ -166,7 +166,7 @@ def test_highlight_from_json_raises_after_hydrogens_hidden(
 
 
 def test_hide_hydrogens_raises_after_highlight_from_json_with_hide_hydrogens(
-    doc: HighlightBackendDocument, hml_json: str
+    doc: HighlightBackendMolecule, hml_json: str
 ) -> None:
     doc.highlight_from_json(hml_json, False)
     with pytest.raises(
@@ -176,7 +176,7 @@ def test_hide_hydrogens_raises_after_highlight_from_json_with_hide_hydrogens(
 
 
 def test_callback_methods_bypass_the_guard(
-    doc: HighlightBackendDocument, hml_json: str, atol: float
+    doc: HighlightBackendMolecule, hml_json: str, atol: float
 ) -> None:
     doc.cleanup_callback()
     doc.cleanup_callback()
@@ -197,7 +197,7 @@ def test_callback_methods_bypass_the_guard(
     doc.add_label_callback("Compound 1")
 
 
-def test_add_label(doc: HighlightBackendDocument) -> None:
+def test_add_label(doc: HighlightBackendMolecule) -> None:
     assert doc.get_label() is None
     before = doc.to_svg()
     doc.add_label("Compound 1")
@@ -208,7 +208,7 @@ def test_add_label(doc: HighlightBackendDocument) -> None:
     assert 'class="legend"' in doc.to_svg()
 
 
-def test_add_label_raises_when_already_labeled(doc: HighlightBackendDocument) -> None:
+def test_add_label_raises_when_already_labeled(doc: HighlightBackendMolecule) -> None:
     doc.add_label("Compound 1")
     with pytest.raises(ValueError, match="Already labeled"):
         doc.add_label("Compound 2")

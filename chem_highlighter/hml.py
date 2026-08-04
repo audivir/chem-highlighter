@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from statistics import mean
-from typing import TYPE_CHECKING, Literal, TypeAlias, final
+from typing import TYPE_CHECKING, Generic, Literal, TypeAlias, final
 
 import msgspec
 from typing_extensions import Self, TypeVar
@@ -24,15 +24,15 @@ if TYPE_CHECKING:
 
     from rdkit import Chem
 
-    from chem_highlighter.backend.rdkit import RDKitDocument
+    from chem_highlighter.backend.rdkit import RDKitMolecule
     from chem_highlighter.utils import RGBA
 
 MAX_CLEANUPS = 100
 
-HighlightBackendDocumentT_co = TypeVar(
-    "HighlightBackendDocumentT_co",
-    bound="HighlightBackendDocument",
-    default="RDKitDocument",
+HighlightBackendMoleculeT_co = TypeVar(
+    "HighlightBackendMoleculeT_co",
+    bound="HighlightBackendMolecule",
+    default="RDKitMolecule",
     covariant=True,
 )
 
@@ -101,8 +101,8 @@ class HMol(HML):
     mol: str
 
 
-class HighlightBackendDocument(ABC):
-    """Abstract base class for highlight backend documents."""
+class HighlightBackendMolecule(ABC):
+    """Abstract base class for highlight backend molecules."""
 
     @abstractmethod
     def get_hml_json(self) -> str | None:
@@ -123,21 +123,21 @@ class HighlightBackendDocument(ABC):
     @classmethod
     @abstractmethod
     def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
-        """Create a document from byte data."""
+        """Create a molecule from byte data."""
 
     @final
     @classmethod
     def from_string(cls, data: str, fmt: InputFormat) -> Self:
-        """Create a document from string data."""
+        """Create a molecule from string data."""
         return cls.from_bytes(data.encode(), fmt)
 
     @abstractmethod
     def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:
-        """Export the document to the specified format as bytes."""
+        """Export the molecule to the specified format as bytes."""
 
     @final
     def export_string(self, fmt: OutputFormat, use_v2000: bool = False) -> str:
-        """Export the document to the specified format as a string."""
+        """Export the molecule to the specified format as a string."""
         return self.export(fmt, use_v2000).decode()
 
     @abstractmethod
@@ -255,13 +255,13 @@ class HighlightBackendDocument(ABC):
     @final
     @classmethod
     def from_mol(cls, mol: Chem.Mol) -> Self:
-        """Create a document from a provided molecule as RDkit molecule."""
+        """Create a molecule from a provided molecule as RDkit molecule."""
         return cls.from_molblock(get_high_precision_v3000(mol))
 
     @final
     @classmethod
     def from_molblock(cls, molblock: str) -> Self:
-        """Create a document from a provided molecule as molblock."""
+        """Create a molecule from a provided molecule as molblock."""
         return cls.from_string(molblock, "Mol")
 
     @final
@@ -330,3 +330,133 @@ class HighlightBackendDocument(ABC):
             for field in hml.__struct_fields__:
                 setattr(hmol, field, getattr(hml, field))
         return msgspec.json.encode(hmol).decode()
+
+
+class Document(Generic[HighlightBackendMoleculeT_co]):
+    """A collection of one or more molecules parsed from a single input, laid out on a canvas."""
+
+    def __init__(
+        self,
+        molecules: list[HighlightBackendMoleculeT_co],
+        source_format: InputFormat,
+        offsets: list[tuple[float, float]] | None = None,
+    ) -> None:
+        """Initialize the document from already-constructed molecules, in order."""
+        if not molecules:
+            raise ValueError("Document requires at least one molecule")
+        if offsets is not None and len(offsets) != len(molecules):
+            raise ValueError("offsets must have the same length as molecules")
+        self.molecules = molecules
+        self.source_format = source_format
+        self.offsets = list(offsets) if offsets is not None else [(0.0, 0.0)] * len(molecules)
+
+    def __len__(self) -> int:
+        """Return the number of molecules in the document."""
+        return len(self.molecules)
+
+    def molecule(self, ix: int) -> HighlightBackendMoleculeT_co:
+        """Return the molecule at the given index, raising `IndexError` if out of range."""
+        return self.molecules[ix]
+
+    @classmethod
+    def from_bytes(
+        cls,
+        data: bytes,
+        fmt: InputFormat,
+        molecule_backend: type[HighlightBackendMoleculeT_co],
+    ) -> Self:
+        """Create a document from byte data, splitting multi-molecule input into `molecules`."""
+        from rdkit import Chem
+
+        mols: list[Chem.Mol]
+        if fmt == "SDF":
+            from io import BytesIO
+
+            buffer = BytesIO(data)
+            with Chem.ForwardSDMolSupplier(buffer) as sds:
+                mols = list(sds)
+        elif fmt == "RXN":
+            from rdkit.Chem import rdChemReactions
+
+            try:
+                rxn = rdChemReactions.ReactionFromRxnBlock(data.decode())
+            except (ValueError, RuntimeError):
+                rxn = None
+            mols = [*rxn.GetReactants(), *rxn.GetAgents(), *rxn.GetProducts()] if rxn else []
+        elif fmt == "CDXML":
+            mols = list(Chem.MolsFromCDXML(data.decode(), removeHs=False))
+        elif fmt == "SMILES":
+            params = Chem.SmilesParserParams()
+            params.removeHs = False  # type: ignore[assignment]
+            smiles_mol = Chem.MolFromSmiles(data.decode(), params)
+            mols = (
+                list(Chem.GetMolFrags(smiles_mol, asMols=True, sanitizeFrags=False))
+                if smiles_mol
+                else []
+            )
+        else:
+            # Mol, CDX, InChI: always a single molecule (or unsupported) -- reuse the
+            # single-molecule backend's own construction/restrictions unchanged.
+            return cls([molecule_backend.from_bytes(data, fmt)], fmt)
+
+        mols = [mol for mol in mols if mol is not None and mol.GetNumAtoms() >= 1]
+        if not mols:
+            raise ValueError(f"Invalid {fmt} input")
+        molecules = [molecule_backend(mol) for mol in mols]  # type: ignore[call-arg]
+        return cls(molecules, fmt)
+
+    @classmethod
+    def from_string(
+        cls,
+        data: str,
+        fmt: InputFormat,
+        molecule_backend: type[HighlightBackendMoleculeT_co],
+    ) -> Self:
+        """Create a document from string data."""
+        return cls.from_bytes(data.encode(), fmt, molecule_backend)
+
+    def _combine_for_export(self) -> Chem.Mol:
+        """Combine every molecule into one ephemeral `Chem.Mol`, translated by its offset."""
+        from rdkit import Chem
+        from rdkit.Geometry import Point3D
+
+        combined: Chem.Mol | None = None
+        for mol_backend, (dx, dy) in zip(self.molecules, self.offsets, strict=True):
+            mol = Chem.Mol(mol_backend.mol)  # type: ignore[attr-defined]
+            if (dx, dy) != (0.0, 0.0):
+                conf = mol.GetConformer()
+                for atom_ix in range(mol.GetNumAtoms()):
+                    pos = conf.GetAtomPosition(atom_ix)
+                    conf.SetAtomPosition(atom_ix, Point3D(pos.x + dx, pos.y + dy, pos.z))
+            combined = mol if combined is None else Chem.CombineMols(combined, mol)
+        if combined is None:  # pragma: no cover -- `molecules` is never empty, see `__init__`
+            raise ValueError("Document requires at least one molecule")
+        # `CombineMols` does not carry ring perception over onto the new `Chem.Mol`, so
+        # rendering it (which needs ring info to fill/highlight rings) would otherwise fail.
+        Chem.GetSSSR(combined)
+        return combined
+
+    def export(
+        self, fmt: OutputFormat, use_v2000: bool = False, molecule_ix: int | None = None
+    ) -> bytes:
+        """Export the document, or a single molecule of it if `molecule_ix` is given, as bytes."""
+        if molecule_ix is not None:
+            return self.molecule(molecule_ix).export(fmt, use_v2000)
+        if fmt == "SDF":
+            return "".join(m.export_string("SDF", use_v2000) for m in self.molecules).encode()
+        if fmt == "SMILES":
+            return ".".join(m.export_string("SMILES") for m in self.molecules).encode()
+        if fmt in ("SVG", "PNG"):
+            from chem_highlighter.backend.rdkit import draw_mol
+
+            combined = self._combine_for_export()
+            return draw_mol(None, combined, "svg" if fmt == "SVG" else "png")
+        raise OutputFormatNotSupported(
+            f"{type(self).__name__} does not support exporting the whole document to {fmt}"
+        )
+
+    def export_string(
+        self, fmt: OutputFormat, use_v2000: bool = False, molecule_ix: int | None = None
+    ) -> str:
+        """Export the document, or a single molecule of it, to the specified format as a string."""
+        return self.export(fmt, use_v2000, molecule_ix).decode()

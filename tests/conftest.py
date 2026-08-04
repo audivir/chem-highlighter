@@ -5,8 +5,8 @@ from __future__ import annotations
 import msgspec
 import pytest
 
-from chem_highlighter.backend.rdkit import RDKitDocument
-from chem_highlighter.hml import HML, HighlightBackendDocument
+from chem_highlighter.backend.rdkit import RDKitMolecule
+from chem_highlighter.hml import HML, HighlightBackendMolecule
 from chem_highlighter.utils import mol_from_smiles
 
 
@@ -16,8 +16,8 @@ def atol() -> float:
 
 
 @pytest.fixture
-def doc() -> HighlightBackendDocument:
-    return RDKitDocument.from_mol(mol_from_smiles("c1ccccc1"))
+def doc() -> HighlightBackendMolecule:
+    return RDKitMolecule.from_mol(mol_from_smiles("c1ccccc1"))
 
 
 @pytest.fixture

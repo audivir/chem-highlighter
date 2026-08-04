@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 from chem_highlighter import align, decomposer
-from chem_highlighter.backend.rdkit import RDKitDocument
+from chem_highlighter.backend.rdkit import RDKitMolecule
 from chem_highlighter.diff import colorize_smiles_diff, get_smiles_diff
-from chem_highlighter.hml import HML, HighlightBackendDocument, HighlightBackendDocumentT_co, HMol
+from chem_highlighter.hml import (
+    HML,
+    Document,
+    HighlightBackendMolecule,
+    HighlightBackendMoleculeT_co,
+    HMol,
+)
 
 __all__ = [
     "HML",
+    "Document",
     "HMol",
-    "HighlightBackendDocument",
-    "HighlightBackendDocumentT_co",
-    "RDKitDocument",
+    "HighlightBackendMolecule",
+    "HighlightBackendMoleculeT_co",
+    "RDKitMolecule",
     "align",
     "colorize_smiles_diff",
     "decomposer",

@@ -6,7 +6,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 from xml.etree import ElementTree as ET
 
-from chem_highlighter.backend.rdkit import RDKitDocument
+from chem_highlighter.backend.rdkit import RDKitMolecule
 from chem_highlighter.decomposer.core import Core, DecomposedList, DecomposedMol
 from chem_highlighter.decomposer.highlight import draw_single
 from chem_highlighter.decomposer.rejoin import join_multiple, mask_hydrogens
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure, SubFigure
     from rdkit import Chem
 
-    from chem_highlighter.hml import HighlightBackendDocumentT_co
+    from chem_highlighter.hml import HighlightBackendMoleculeT_co
 
 
 def _change_map_atoms(mol: Chem.Mol, from_: int, to: int) -> Chem.Mol:
@@ -137,8 +137,8 @@ def plot_decomposed(  # noqa: PLR0913,PLR0917
     fig: Figure | SubFigure | None = None,
     # opts: MolDrawOptions | None = None, # noqa: ERA001
     title: str | None = None,
-    backend: type[HighlightBackendDocumentT_co] = RDKitDocument,  # type: ignore[assignment]
-) -> tuple[DecomposedMol, HighlightBackendDocumentT_co, str, Axes]:
+    backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
+) -> tuple[DecomposedMol, HighlightBackendMoleculeT_co, str, Axes]:
     """Render the most-common R-group for each position with a frequency-scaled colorbar.
 
     Returns:

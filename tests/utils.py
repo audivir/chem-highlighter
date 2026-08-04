@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from _pytest.mark import ParameterSet
 
-    from chem_highlighter.hml import HighlightBackendDocument
+    from chem_highlighter.hml import HighlightBackendMolecule
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FIXTURES_ORDER = [FIXTURES]
@@ -112,7 +112,7 @@ def extract_bond_codes(molblock: str) -> list[int]:
     return codes
 
 
-def assert_benzene_kekulized(doc: HighlightBackendDocument, kekulized: bool) -> None:
+def assert_benzene_kekulized(doc: HighlightBackendMolecule, kekulized: bool) -> None:
     assert doc.get_edit_state() == (kekulized, False, False)
 
     bond_type_codes = extract_bond_codes(doc.to_molblock())
@@ -142,10 +142,10 @@ def visualize_conformers(a: Chem.Mol, b: Chem.Mol) -> None:  # pragma: no cover
     import webbrowser
     from pathlib import Path
 
-    from chem_highlighter import RDKitDocument
+    from chem_highlighter import RDKitMolecule
 
-    svg_a = RDKitDocument.from_mol(a).to_svg()
-    svg_b = RDKitDocument.from_mol(b).to_svg()
+    svg_a = RDKitMolecule.from_mol(a).to_svg()
+    svg_b = RDKitMolecule.from_mol(b).to_svg()
 
     conf_a = a.GetConformer()
     conf_b = b.GetConformer()

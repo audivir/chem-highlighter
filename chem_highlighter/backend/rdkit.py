@@ -13,7 +13,7 @@ from typing_extensions import Self, override
 
 from chem_highlighter.hml import (
     HML,
-    HighlightBackendDocument,
+    HighlightBackendMolecule,
     InputFormat,
     InputFormatNotSupported,
     OutputFormat,
@@ -179,11 +179,11 @@ def draw_mol(
     return drawer.GetDrawingText()  # type: ignore[no-any-return]
 
 
-class RDKitDocument(HighlightBackendDocument):
+class RDKitMolecule(HighlightBackendMolecule):
     """A structure to store a molecule for RDKit backend."""
 
     def __init__(self, mol: Chem.Mol) -> None:
-        """Initialize the RDKitDocument from a RDKit molecule.
+        """Initialize the RDKitMolecule from a RDKit molecule.
 
         Args:
             mol: The RDKit molecule to wrap.

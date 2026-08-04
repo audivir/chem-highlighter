@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 
 import msgspec
 
-from chem_highlighter.backend.rdkit import RDKitDocument
-from chem_highlighter.hml import HML, HighlightBackendDocument, HighlightBackendDocumentT_co
+from chem_highlighter.backend.rdkit import RDKitMolecule
+from chem_highlighter.hml import HML, HighlightBackendMolecule, HighlightBackendMoleculeT_co
 from chem_highlighter.utils import get_atoms, get_bonds, mol_from_smiles, mol_to_smiles, setup_cmap
 
 if TYPE_CHECKING:
@@ -247,8 +247,8 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
     core: Mol,
     source_idx_prop: str = "SourceAtomIdx",
     get_colors_func: Callable[[], list[RGBA]] | None = None,
-    backend: type[HighlightBackendDocumentT_co] = RDKitDocument,  # type: ignore[assignment]
-) -> HighlightBackendDocumentT_co:
+    backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
+) -> HighlightBackendMoleculeT_co:
     """Highlight R-groups in a molecule."""
     from rdkit import Chem
     from rdkit.Chem import rdqueries
@@ -269,7 +269,7 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
         for at in get_atoms(group):
             set_neighbor_labels_for_atom(lbl, mol, at, source_idx_prop)
 
-    doc = RDKitDocument.from_mol(mol)
+    doc = RDKitMolecule.from_mol(mol)
 
     # Identify and store which atoms, bonds, and rings we'll be highlighting
     # use `mol` (not `doc.mol`) since the molblock round-trip performed by
@@ -293,8 +293,8 @@ def draw_single(
     # sub_img_size: tuple[int, int] = (250, 200), # noqa: ERA001
     get_colors_func: Callable[[], list[RGBA]] | None = None,
     # opts: MolDrawOptions | None = None,  # noqa: ERA001
-    backend: type[HighlightBackendDocumentT_co] = RDKitDocument,  # type: ignore[assignment]
-) -> HighlightBackendDocumentT_co:
+    backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
+) -> HighlightBackendMoleculeT_co:
     """Draw a single decomposed molecule by highlighting and aligning.
 
     Args:
@@ -326,7 +326,7 @@ def draw_multiple(  # pragma: no cover
     n_per_row: int = 4,
     # sub_img_size: tuple[int, int] = (250, 200), # noqa: ERA001
     get_colors_func: Callable[[], list[RGBA]] | None = None,
-    backend: type[HighlightBackendDocument] = RDKitDocument,
+    backend: type[HighlightBackendMolecule] = RDKitMolecule,
 ) -> None:
     """Draw multiple groups of molecules in a grid."""
     import imgkit
