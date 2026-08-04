@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd" >
+<CDXML
+ CreationProgram="ChemDraw 26.0.0.6599"
+ BoundingBox="260.06 406.25 334.94 435.75"
+ WindowPosition="0 0"
+ WindowSize="0 0"
+ FractionalWidths="yes"
+ LabelFont="58"
+ LabelSize="10"
+ LabelFace="96"
+ CaptionFont="58"
+ CaptionSize="10"
+ HashSpacing="2.50"
+ MarginWidth="1.60"
+ LineWidth="0.60"
+ BoldWidth="2"
+ BondLength="14.40"
+ BondSpacing="18"
+ ChainAngle="120"
+ PrintMargins="0 0 0 0"
+ MacPrintInfo="000300000048004800000000030F022FFFEEFFEE033802410367057B03DF000200000048004800000000030F022F000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000400000000000000000000100000000000000000000000000000000"
+ color="0"
+ bgcolor="1"
+ MonomerRenderingStyle="graphic"
+><colortable>
+<color r="1" g="1" b="1"/>
+<color r="0" g="0" b="0"/>
+<color r="1" g="0" b="0"/>
+<color r="1" g="1" b="0"/>
+<color r="0" g="1" b="0"/>
+<color r="0" g="1" b="1"/>
+<color r="0" g="0" b="1"/>
+<color r="1" g="0" b="1"/>
+</colortable><fonttable>
+<font id="58" charset="x-mac-roman" name="Arial"/>
+</fonttable><page
+ id="25"
+ BoundingBox="0 0 595 842"
+ HeaderPosition="36"
+ FooterPosition="36"
+ PrintTrimMarks="yes"
+ HeightPages="1"
+ WidthPages="1"
+ PageDefinition="Center"
+><group
+ id="20"
+ BoundingBox="260.06 406.25 334.94 435.75"
+ Z="1"
+><fragment
+ id="21"
+ BoundingBox="260.06 406.25 285.60 435.75"
+ Z="2"
+><n
+ id="1"
+ p="285.30 428.20"
+ Z="3"
+ AtomID="1"
+/><n
+ id="2"
+ p="272.83 435.40"
+ Z="4"
+ AtomID="2"
+/><n
+ id="3"
+ p="260.36 428.20"
+ Z="5"
+ AtomID="3"
+/><n
+ id="4"
+ p="260.36 413.80"
+ Z="6"
+ AtomID="4"
+/><n
+ id="5"
+ p="272.83 406.60"
+ Z="7"
+ AtomID="5"
+/><n
+ id="6"
+ p="285.30 413.80"
+ Z="8"
+ AtomID="6"
+/><b
+ id="11"
+ Z="9"
+ B="1"
+ E="2"
+ Order="1.5"
+/><b
+ id="12"
+ Z="10"
+ B="2"
+ E="3"
+ Order="1.5"
+/><b
+ id="13"
+ Z="11"
+ B="3"
+ E="4"
+ Order="1.5"
+/><b
+ id="14"
+ Z="12"
+ B="4"
+ E="5"
+ Order="1.5"
+/><b
+ id="15"
+ Z="13"
+ B="5"
+ E="6"
+ Order="1.5"
+/><b
+ id="16"
+ Z="14"
+ B="1"
+ E="6"
+ Order="1.5"
+/><graphic
+ id="23"
+ BoundingBox="282.42 421 272.83 421"
+ Z="21"
+ GraphicType="Oval"
+ OvalType="Circle"
+ Center3D="272.83 421 0"
+ MajorAxisEnd3D="282.42 421 0"
+ MinorAxisEnd3D="272.83 430.59 0"
+/></fragment><fragment
+ id="22"
+ BoundingBox="299.55 417.05 334.94 428.36"
+ Z="15"
+><n
+ id="7"
+ p="299.70 424.60"
+ Z="16"
+ AtomID="7"
+/><n
+ id="8"
+ p="312.17 417.40"
+ Z="17"
+ AtomID="8"
+/><n
+ id="9"
+ p="324.64 424.60"
+ Z="18"
+ Element="8"
+ NumHydrogens="1"
+ NeedsClean="yes"
+ AtomID="9"
+><t
+ p="320.75 428.24"
+ BoundingBox="321.23 420.96 334.94 428.36"
+ LabelAlignment="Left"
+><s font="58" size="10" color="0" face="96">OH</s></t></n><b
+ id="17"
+ Z="19"
+ B="7"
+ E="8"
+/><b
+ id="18"
+ Z="20"
+ B="8"
+ E="9"
+/></fragment></group></page></CDXML>

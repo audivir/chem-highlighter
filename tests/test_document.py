@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from utils import read_fixture
 
-from chem_highlighter.backend.rdkit import RDKitMolecule
-from chem_highlighter.hml import Document, InputFormatNotSupported, OutputFormatNotSupported
+from chem_highlighter.backend.rdkit import RDKitDocument, RDKitMolecule
+from chem_highlighter.hml import InputFormatNotSupported, OutputFormatNotSupported
 
 
 def _make_sdf(smiles_list: list[str]) -> str:
@@ -20,9 +20,7 @@ def _make_rxn(reactant_smiles: str, product_smiles: str) -> str:
     """Build a minimal $RXN block with one reactant and one product."""
     from rdkit.Chem import rdChemReactions
 
-    rxn = rdChemReactions.ReactionFromSmarts(
-        f"{reactant_smiles}>>{product_smiles}", useSmiles=True
-    )
+    rxn = rdChemReactions.ReactionFromSmarts(f"{reactant_smiles}>>{product_smiles}", useSmiles=True)
     return rdChemReactions.ReactionToRxnBlock(rxn)
 
 
@@ -31,7 +29,7 @@ def _make_rxn(reactant_smiles: str, product_smiles: str) -> str:
 
 def test_from_bytes_sdf_reads_every_record() -> None:
     sdf = _make_sdf(["CCO", "c1ccccc1", "CC(=O)O"])
-    doc = Document.from_bytes(sdf.encode(), "SDF", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(sdf.encode(), "SDF")
     assert len(doc) == 3
     smiles = [m.kekulize(False).export_string("SMILES") for m in doc.molecules]
     assert smiles == ["CCO", "c1ccccc1", "CC(=O)O"]
@@ -41,12 +39,12 @@ def test_from_bytes_sdf_reads_every_record() -> None:
 
 def test_from_bytes_sdf_empty_raises() -> None:
     with pytest.raises(ValueError, match="Invalid SDF input"):
-        Document.from_bytes(b"", "SDF", RDKitMolecule)
+        RDKitDocument.from_bytes(b"", "SDF")
 
 
 def test_from_bytes_sdf_garbage_raises() -> None:
     with pytest.raises(ValueError, match="Invalid SDF input"):
-        Document.from_bytes(b"invalid input", "SDF", RDKitMolecule)
+        RDKitDocument.from_bytes(b"invalid input", "SDF")
 
 
 # --- from_bytes: RXN -------------------------------------------------------------------------
@@ -54,7 +52,7 @@ def test_from_bytes_sdf_garbage_raises() -> None:
 
 def test_from_bytes_rxn_reads_reactants_then_agents_then_products() -> None:
     block = _make_rxn("CCO", "CC=O")
-    doc = Document.from_bytes(block.encode(), "RXN", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(block.encode(), "RXN")
     # MDL RXN files have no distinct agent section -- only reactants then products.
     assert len(doc) == 2
     smiles = [m.export_string("SMILES") for m in doc.molecules]
@@ -64,19 +62,19 @@ def test_from_bytes_rxn_reads_reactants_then_agents_then_products() -> None:
 
 def test_from_bytes_rxn_empty_raises() -> None:
     with pytest.raises((ValueError, RuntimeError), match="Invalid RXN input"):
-        Document.from_bytes(b"", "RXN", RDKitMolecule)
+        RDKitDocument.from_bytes(b"", "RXN")
 
 
 def test_from_bytes_rxn_garbage_raises() -> None:
     with pytest.raises((ValueError, RuntimeError), match="Invalid RXN input"):
-        Document.from_bytes(b"invalid input", "RXN", RDKitMolecule)
+        RDKitDocument.from_bytes(b"invalid input", "RXN")
 
 
 # --- from_bytes: CDXML -------------------------------------------------------------------------
 
 
 def test_from_bytes_cdxml_allows_multiple_molecules() -> None:
-    doc = Document.from_bytes(read_fixture("two_mols.cdxml").encode(), "CDXML", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(read_fixture("two_mols.cdxml").encode(), "CDXML")
     assert len(doc) == 2
     assert doc.molecule(0) is not doc.molecule(1)
     # Each molecule round-trips independently through its own export_string.
@@ -85,38 +83,38 @@ def test_from_bytes_cdxml_allows_multiple_molecules() -> None:
 
 
 def test_from_bytes_cdxml_single_molecule() -> None:
-    doc = Document.from_bytes(read_fixture("one_mol.cdxml").encode(), "CDXML", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(read_fixture("one_mol.cdxml").encode(), "CDXML")
     assert len(doc) == 1
 
 
 def test_from_bytes_cdxml_no_molecules_raises() -> None:
     with pytest.raises((ValueError, RuntimeError), match="Invalid CDXML input"):
-        Document.from_bytes(read_fixture("no_mol.cdxml").encode(), "CDXML", RDKitMolecule)
+        RDKitDocument.from_bytes(read_fixture("no_mol.cdxml").encode(), "CDXML")
 
 
 # --- from_bytes: SMILES ------------------------------------------------------------------------
 
 
 def test_from_bytes_smiles_splits_fragments() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     assert len(doc) == 2
     smiles = [m.kekulize(False).export_string("SMILES") for m in doc.molecules]
     assert smiles == ["CCO", "c1ccccc1"]
 
 
 def test_from_bytes_smiles_single_fragment() -> None:
-    doc = Document.from_bytes(b"CCO", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO", "SMILES")
     assert len(doc) == 1
 
 
 def test_from_bytes_smiles_empty_raises() -> None:
     with pytest.raises(ValueError, match="Invalid SMILES input"):
-        Document.from_bytes(b"", "SMILES", RDKitMolecule)
+        RDKitDocument.from_bytes(b"", "SMILES")
 
 
 def test_from_bytes_smiles_garbage_raises() -> None:
     with pytest.raises(ValueError, match="Invalid SMILES input"):
-        Document.from_bytes(b"invalid input", "SMILES", RDKitMolecule)
+        RDKitDocument.from_bytes(b"invalid input", "SMILES")
 
 
 # --- from_bytes: single-molecule delegation (Mol, InChI, CDX) ----------------------------------
@@ -124,20 +122,20 @@ def test_from_bytes_smiles_garbage_raises() -> None:
 
 def test_from_bytes_mol_is_single_molecule() -> None:
     molblock = RDKitMolecule.from_string("CCO", "SMILES").to_molblock()
-    doc = Document.from_bytes(molblock.encode(), "Mol", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(molblock.encode(), "Mol")
     assert len(doc) == 1
     assert doc.source_format == "Mol"
 
 
 def test_from_bytes_inchi_is_single_molecule() -> None:
     inchi = RDKitMolecule.from_string("CCO", "SMILES").export_string("InChI")
-    doc = Document.from_string(inchi, "InChI", RDKitMolecule)
+    doc = RDKitDocument.from_string(inchi, "InChI")
     assert len(doc) == 1
 
 
 def test_from_bytes_cdx_still_unsupported() -> None:
     with pytest.raises(InputFormatNotSupported, match="does not support importing from CDX"):
-        Document.from_bytes(b"", "CDX", RDKitMolecule)
+        RDKitDocument.from_bytes(b"", "CDX")
 
 
 # --- __init__ / __len__ / molecule ---------------------------------------------------------
@@ -145,23 +143,23 @@ def test_from_bytes_cdx_still_unsupported() -> None:
 
 def test_document_requires_at_least_one_molecule() -> None:
     with pytest.raises(ValueError, match="Document requires at least one molecule"):
-        Document([], "Mol")
+        RDKitDocument([], "Mol")
 
 
 def test_document_offsets_length_must_match_molecules() -> None:
     mol = RDKitMolecule.from_string("CCO", "SMILES")
     with pytest.raises(ValueError, match="offsets must have the same length as molecules"):
-        Document([mol], "Mol", offsets=[(0.0, 0.0), (1.0, 1.0)])
+        RDKitDocument([mol], "Mol", offsets=[(0.0, 0.0), (1.0, 1.0)])
 
 
 def test_document_default_offsets_are_zero() -> None:
     mol = RDKitMolecule.from_string("CCO", "SMILES")
-    doc = Document([mol], "Mol")
+    doc = RDKitDocument([mol], "Mol")
     assert doc.offsets == [(0.0, 0.0)]
 
 
 def test_document_molecule_out_of_range_raises_index_error() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     with pytest.raises(IndexError):
         doc.molecule(2)
 
@@ -170,50 +168,50 @@ def test_document_molecule_out_of_range_raises_index_error() -> None:
 
 
 def test_export_with_molecule_ix_delegates_to_that_molecule() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     assert doc.export_string("SMILES", molecule_ix=0) == doc.molecule(0).export_string("SMILES")
     assert doc.export("Mol", molecule_ix=1) == doc.molecule(1).export("Mol")
 
 
 def test_export_sdf_concatenates_every_molecule() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     output = doc.export_string("SDF")
     assert output.count("$$$$") == 2
     # roundtrips back into the same number of records
-    reparsed = Document.from_bytes(output.encode(), "SDF", RDKitMolecule)
+    reparsed = RDKitDocument.from_bytes(output.encode(), "SDF")
     assert len(reparsed) == 2
 
 
 def test_export_smiles_dot_joins_every_molecule() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     expected = ".".join(m.export_string("SMILES") for m in doc.molecules)
     assert doc.export_string("SMILES") == expected
 
 
 def test_export_svg_combines_molecules_with_default_offsets() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     svg = doc.export_string("SVG")
     assert "<svg" in svg
 
 
 def test_export_svg_translates_by_explicit_offsets() -> None:
     mols = [RDKitMolecule.from_string("CCO", "SMILES"), RDKitMolecule.from_string("CCO", "SMILES")]
-    doc = Document(mols, "SMILES", offsets=[(0.0, 0.0), (25.0, 0.0)])
+    doc = RDKitDocument(mols, "SMILES", offsets=[(0.0, 0.0), (25.0, 0.0)])
     svg = doc.export_string("SVG")
     assert "<svg" in svg
 
 
 def test_export_png_combines_molecules() -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     png = doc.export("PNG")
     assert png[:4] == b"\x89PNG"
 
 
 @pytest.mark.parametrize("fmt", ["RXN", "CDX", "CDXML", "EPS", "Mol", "InChI", "InChIKey"])
 def test_export_whole_document_unsupported_formats(fmt: str) -> None:
-    doc = Document.from_bytes(b"CCO.c1ccccc1", "SMILES", RDKitMolecule)
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     with pytest.raises(
         OutputFormatNotSupported,
-        match=f"Document does not support exporting the whole document to {fmt}",
+        match=f"RDKitDocument does not support exporting the whole document to {fmt}",
     ):
         doc.export(fmt)  # type: ignore[arg-type]

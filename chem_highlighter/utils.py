@@ -161,7 +161,10 @@ def is_same_conformer(  # noqa: C901,PLR0912
         raise ValueError("Invalid molblocks")
 
     if Chem.MolToSmiles(mol_a) != Chem.MolToSmiles(mol_b):
-        raise ValueError("Non-identical molecules")
+        if not quiet:
+            logger.error("Non-identical molecules")
+            raise ValueError("Non-identical molecules")
+        return False
 
     # Basic topology. Unreachable in practice: identical canonical SMILES already
     # implies identical atom/bond counts, but this stays as a defensive guard.

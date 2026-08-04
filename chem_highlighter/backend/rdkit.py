@@ -13,6 +13,7 @@ from typing_extensions import Self, override
 
 from chem_highlighter.hml import (
     HML,
+    Document,
     HighlightBackendMolecule,
     InputFormat,
     InputFormatNotSupported,
@@ -66,7 +67,9 @@ def _bold_legend(svg: str) -> str:
     there's no font weight to select -- a small stroke in the same color visually thickens the
     glyph outlines instead.
     """
-    return LEGEND_PATH_RE.sub(lambda m: f'{m.group(1)} stroke="{m.group(2)}" stroke-width="1.2" />', svg)
+    return LEGEND_PATH_RE.sub(
+        lambda m: f'{m.group(1)} stroke="{m.group(2)}" stroke-width="1.2" />', svg
+    )
 
 
 def draw_polygon(
@@ -179,6 +182,43 @@ def draw_mol(
     return drawer.GetDrawingText()  # type: ignore[no-any-return]
 
 
+def export_rdkit_molecule(mol_backend: RDKitMolecule, fmt: OutputFormat, use_v2000: bool) -> bytes:  # noqa: PLR0911
+    """Serialize one RDKit-backed molecule to `fmt`.
+
+    Shared by `RDKitMolecule.export` (standalone use) and `RDKitDocument` (whole-document/
+    single-molecule export), so the format-conversion logic lives in exactly one place.
+    """
+    from rdkit import Chem
+
+    kekulized, _, _ = mol_backend.get_edit_state()
+    hml_json = mol_backend.get_hml_json()
+    hml = msgspec.json.Decoder(HML).decode(hml_json) if hml_json else None
+    if fmt == "SDF":
+        buffer = StringIO()
+        with Chem.SDWriter(buffer) as sdw:
+            sdw.SetForceV3000(not use_v2000)
+            sdw.SetKekulize(kekulized)
+            sdw.write(mol_backend.mol)
+        return buffer.getvalue().encode()
+    if fmt == "Mol":
+        if use_v2000:
+            return Chem.MolToMolBlock(mol_backend.mol, kekulize=kekulized).encode()
+        return get_high_precision_v3000(mol_backend.mol, kekulize=kekulized).encode()
+    if fmt == "SMILES":
+        return Chem.MolToSmiles(mol_backend.mol, kekuleSmiles=kekulized, canonical=False).encode()
+    if fmt == "InChI":
+        return Chem.MolToInchi(mol_backend.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
+    if fmt == "InChIKey":
+        return Chem.MolToInchiKey(mol_backend.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
+    if fmt == "SVG":
+        return draw_mol(hml, mol_backend.mol, "svg", mol_backend._label)  # noqa: SLF001
+    if fmt == "PNG":
+        return draw_mol(hml, mol_backend.mol, "png", mol_backend._label)  # noqa: SLF001
+    # RXN, CDX, CDXML, EPS
+    name = type(mol_backend).__name__
+    raise OutputFormatNotSupported(f"{name} does not support exporting to {fmt}")
+
+
 class RDKitMolecule(HighlightBackendMolecule):
     """A structure to store a molecule for RDKit backend."""
 
@@ -271,36 +311,9 @@ class RDKitMolecule(HighlightBackendMolecule):
         return cls(mol)
 
     @override
-    def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:  # noqa: PLR0911
-        """Export the document to the specified format as bytes."""
-        from rdkit import Chem
-
-        kekulized, _, _ = self.get_edit_state()
-        hml_json = self.get_hml_json()
-        hml = msgspec.json.Decoder(HML).decode(hml_json) if hml_json else None
-        if fmt == "SDF":
-            buffer = StringIO()
-            with Chem.SDWriter(buffer) as sdw:
-                sdw.SetForceV3000(not use_v2000)
-                sdw.SetKekulize(kekulized)
-                sdw.write(self.mol)
-            return buffer.getvalue().encode()
-        if fmt == "Mol":
-            if use_v2000:
-                return Chem.MolToMolBlock(self.mol, kekulize=kekulized).encode()
-            return get_high_precision_v3000(self.mol, kekulize=kekulized).encode()
-        if fmt == "SMILES":
-            return Chem.MolToSmiles(self.mol, kekuleSmiles=kekulized, canonical=False).encode()
-        if fmt == "InChI":
-            return Chem.MolToInchi(self.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
-        if fmt == "InChIKey":
-            return Chem.MolToInchiKey(self.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
-        if fmt == "SVG":
-            return draw_mol(hml, self.mol, "svg", self._label)
-        if fmt == "PNG":
-            return draw_mol(hml, self.mol, "png", self._label)
-        # RXN, CDX, CDXML, EPS
-        raise OutputFormatNotSupported(f"{type(self).__name__} does not support exporting to {fmt}")
+    def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:
+        """Export the molecule to the specified format as bytes."""
+        return export_rdkit_molecule(self, fmt, use_v2000)
 
     @override
     def align_to_reference_callback(
@@ -362,3 +375,72 @@ class RDKitMolecule(HighlightBackendMolecule):
         """Do nothing as highlighting occurs during visualization only."""
         if hide_hydrogens:
             self.hide_hydrogens_callback()
+
+
+class RDKitDocument(Document[RDKitMolecule]):
+    """A collection of one or more molecules parsed from a single input, using the RDKit backend."""
+
+    @classmethod
+    @override
+    def _split_bytes(cls, data: bytes, fmt: InputFormat) -> list[RDKitMolecule]:
+        from rdkit import Chem
+
+        mols: list[Chem.Mol]
+        if fmt == "SDF":
+            buffer = BytesIO(data)
+            with Chem.ForwardSDMolSupplier(buffer) as sds:
+                mols = list(sds)
+        elif fmt == "RXN":
+            from rdkit.Chem import rdChemReactions
+
+            try:
+                rxn = rdChemReactions.ReactionFromRxnBlock(data.decode())
+            except (ValueError, RuntimeError):
+                rxn = None
+            mols = [*rxn.GetReactants(), *rxn.GetAgents(), *rxn.GetProducts()] if rxn else []
+        elif fmt == "CDXML":
+            mols = list(Chem.MolsFromCDXML(data.decode(), removeHs=False))
+        elif fmt == "SMILES":
+            params = Chem.SmilesParserParams()
+            params.removeHs = False  # type: ignore[assignment]
+            smiles_mol = Chem.MolFromSmiles(data.decode(), params)
+            mols = (
+                list(Chem.GetMolFrags(smiles_mol, asMols=True, sanitizeFrags=False))
+                if smiles_mol
+                else []
+            )
+        else:
+            # Mol, CDX, InChI: always a single molecule (or unsupported) -- reuse the
+            # single-molecule backend's own construction/restrictions unchanged.
+            return [RDKitMolecule.from_bytes(data, fmt)]
+
+        mols = [mol for mol in mols if mol is not None and mol.GetNumAtoms() >= 1]
+        if not mols:
+            raise ValueError(f"Invalid {fmt} input")
+        return [RDKitMolecule(mol) for mol in mols]
+
+    @override
+    def _combined_export(self, fmt: Literal["SVG", "PNG"]) -> bytes:
+        combined = self._combine_for_export()
+        return draw_mol(None, combined, "svg" if fmt == "SVG" else "png")
+
+    def _combine_for_export(self) -> Chem.Mol:
+        """Combine every molecule into one ephemeral `Chem.Mol`, translated by its offset."""
+        from rdkit import Chem
+        from rdkit.Geometry import Point3D
+
+        combined: Chem.Mol | None = None
+        for mol_backend, (dx, dy) in zip(self.molecules, self.offsets, strict=True):
+            mol = Chem.Mol(mol_backend.mol)
+            if (dx, dy) != (0.0, 0.0):
+                conf = mol.GetConformer()
+                for atom_ix in range(mol.GetNumAtoms()):
+                    pos = conf.GetAtomPosition(atom_ix)
+                    conf.SetAtomPosition(atom_ix, Point3D(pos.x + dx, pos.y + dy, pos.z))
+            combined = mol if combined is None else Chem.CombineMols(combined, mol)
+        if combined is None:  # pragma: no cover -- `molecules` is never empty, see `__init__`
+            raise ValueError("Document requires at least one molecule")
+        # `CombineMols` does not carry ring perception over onto the new `Chem.Mol`, so
+        # rendering it (which needs ring info to fill/highlight rings) would otherwise fail.
+        Chem.GetSSSR(combined)
+        return combined
