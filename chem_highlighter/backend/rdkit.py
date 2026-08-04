@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, Literal, TypeAlias
 
@@ -35,7 +36,12 @@ SENTINEL_ISOTOPE = 999
 
 
 def highlight_without_rings(
-    drawer: Drawer, hml: HML, mol: Chem.Mol, atomrad: float = 0.4, widthmult: float = 2
+    drawer: Drawer,
+    hml: HML,
+    mol: Chem.Mol,
+    legend: str | None = None,
+    atomrad: float = 0.4,
+    widthmult: float = 2,
 ) -> None:
     """Draw the molecule with the provided highlight options. Does not fill rings."""
     atoms = {
@@ -47,7 +53,20 @@ def highlight_without_rings(
     }
     widthmults = dict.fromkeys(bonds, widthmult)
 
-    drawer.DrawMoleculeWithHighlights(mol, "", atoms, bonds, atomrads, widthmults)
+    drawer.DrawMoleculeWithHighlights(mol, legend or "", atoms, bonds, atomrads, widthmults)
+
+
+LEGEND_PATH_RE = re.compile(r'(<path class="legend"[^>]*?fill="([^"]+)")\s*/>')
+
+
+def _bold_legend(svg: str) -> str:
+    """Fake a bold legend by outlining its (already vector-path) glyphs with a matching stroke.
+
+    RDKit draws the legend as filled vector paths (`class='legend'`), not real `<text>`, so
+    there's no font weight to select -- a small stroke in the same color visually thickens the
+    glyph outlines instead.
+    """
+    return LEGEND_PATH_RE.sub(lambda m: f'{m.group(1)} stroke="{m.group(2)}" stroke-width="1.2" />', svg)
 
 
 def draw_polygon(
@@ -89,13 +108,14 @@ def draw_mol(
     hml: HML | None,
     mol: Chem.Mol,
     output: Literal["png", "svg"],
+    legend: str | None = None,
     fill_rings: bool = True,
     opts: Draw.MolDrawOptions | None = None,
 ) -> bytes:
     """Draw the molecule with the provided highlighting options in the given output format."""
     from rdkit.Chem import Draw
-    from rdkit_svg.draw import fix_svg, get_rdkit_svg
-    from rdkit_svg.utils import to_string
+    from rdkit_svg.draw import get_rdkit_svg
+    from rdkit_svg.utils import assure_elem, hide_objects, read_tree, remove_whitespace, to_string
 
     if not hml:
         hml = HML()
@@ -138,13 +158,24 @@ def draw_mol(
         # the molecule on top of the filled rings
         highlight_rings(drawer, hml, mol)
 
-    highlight_without_rings(drawer, hml, mol)
+    highlight_without_rings(drawer, hml, mol, legend)
 
     if isinstance(drawer, Draw.MolDraw2DSVG):
         svg = get_rdkit_svg(drawer)
-        tree = fix_svg(svg)
-        # svg = add_legend(svg, legend, line_breaks=False) # noqa: ERA001
-        return to_string(tree).encode()  # type: ignore[no-any-return,unused-ignore]
+        tree = read_tree(svg)
+        if not assure_elem(tree):
+            raise ValueError("No root element found")
+        hide_objects(tree, ["rect"])
+        if not legend:
+            # rdkit_svg's bbox math (remove_whitespace/find_bounds) undercounts the legend's
+            # bezier-curve glyph paths, cropping the canvas back down to just the molecule and
+            # clipping the legend out of view -- so skip cropping whenever a legend is present
+            # and keep RDKit's own (correctly-sized) canvas instead.
+            remove_whitespace(tree)
+        svg = to_string(tree)
+        if legend:
+            svg = _bold_legend(svg)
+        return svg.encode()  # type: ignore[no-any-return,unused-ignore]
     return drawer.GetDrawingText()  # type: ignore[no-any-return]
 
 
@@ -162,6 +193,7 @@ class RDKitDocument(HighlightBackendDocument):
 
         self.mol = Chem.Mol(mol)
         self._hml_json: str | None = None
+        self._label: str | None = None
         if not self.mol.GetNumConformers():
             rdDepictor.SetPreferCoordGen(True)
             rdDepictor.Compute2DCoords(self.mol)
@@ -187,6 +219,20 @@ class RDKitDocument(HighlightBackendDocument):
     def set_hml_json(self, hml_json: str) -> None:
         """Set the JSON-encoded HML object."""
         self._hml_json = hml_json
+
+    @override
+    def get_label(self) -> str | None:
+        """Get the label text, if set."""
+        return self._label
+
+    @override
+    def set_label(self, label: str) -> None:
+        """Set the label text."""
+        self._label = label
+
+    @override
+    def add_label_callback(self, text: str) -> None:
+        """Do nothing: the label is rendered directly from state during `export`."""
 
     @override
     @classmethod
@@ -250,9 +296,9 @@ class RDKitDocument(HighlightBackendDocument):
         if fmt == "InChIKey":
             return Chem.MolToInchiKey(self.mol).encode()  # type: ignore[no-any-return,no-untyped-call]
         if fmt == "SVG":
-            return draw_mol(hml, self.mol, "svg")
+            return draw_mol(hml, self.mol, "svg", self._label)
         if fmt == "PNG":
-            return draw_mol(hml, self.mol, "png")
+            return draw_mol(hml, self.mol, "png", self._label)
         # RXN, CDX, CDXML, EPS
         raise OutputFormatNotSupported(f"{type(self).__name__} does not support exporting to {fmt}")
 

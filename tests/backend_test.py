@@ -336,6 +336,22 @@ def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendDocu
     )
 
 
+def assert_add_label(backend: type[HighlightBackendDocumentT_co]) -> None:
+    doc = create_doc("c1ccccc1O", backend)
+    before = doc.to_svg()
+    assert doc.get_label() is None
+
+    doc.add_label("Compound 1")
+
+    assert doc.get_label() == "Compound 1"
+    svg = doc.to_svg()
+    assert "<svg" in svg
+    assert svg != before, "adding a label should change the rendered SVG"
+
+    with pytest.raises(ValueError, match="Already labeled"):
+        doc.add_label("Compound 2")
+
+
 def assert_to_console(backend: type[HighlightBackendDocumentT_co]) -> None:
     doc = backend.from_string("C=COCc1ccc(C)cc1", "SMILES")
     doc.kekulize(False)

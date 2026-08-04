@@ -192,3 +192,23 @@ def test_callback_methods_bypass_the_guard(
 
     doc.highlight_from_json_callback(hml_json, False)
     doc.highlight_from_json_callback(hml_json, False)
+
+    doc.add_label_callback("Compound 1")
+    doc.add_label_callback("Compound 1")
+
+
+def test_add_label(doc: HighlightBackendDocument) -> None:
+    assert doc.get_label() is None
+    before = doc.to_svg()
+    doc.add_label("Compound 1")
+    assert doc.get_label() == "Compound 1"
+    # RDKit draws the legend as vector paths, not literal `<text>`, so the string itself
+    # doesn't appear in the SVG -- check it actually changed the rendering instead.
+    assert doc.to_svg() != before
+    assert 'class="legend"' in doc.to_svg()
+
+
+def test_add_label_raises_when_already_labeled(doc: HighlightBackendDocument) -> None:
+    doc.add_label("Compound 1")
+    with pytest.raises(ValueError, match="Already labeled"):
+        doc.add_label("Compound 2")

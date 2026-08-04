@@ -231,6 +231,27 @@ class HighlightBackendDocument(ABC):
         self.set_edit_state(kekulized, aligned, hide_hydrogens)
         return self
 
+    @abstractmethod
+    def get_label(self) -> str | None:
+        """Get the label text, if set."""
+
+    @abstractmethod
+    def set_label(self, label: str) -> None:
+        """Set the label text."""
+
+    @abstractmethod
+    def add_label_callback(self, text: str) -> None:
+        """Run after the checks in `add_label` pass."""
+
+    @final
+    def add_label(self, text: str) -> Self:
+        """Add a bold label, centered below the molecule (chemical drawing convention)."""
+        if self.get_label() is not None:
+            raise ValueError("Already labeled")
+        self.set_label(text)
+        self.add_label_callback(text)
+        return self
+
     @final
     @classmethod
     def from_mol(cls, mol: Chem.Mol) -> Self:

@@ -8,6 +8,7 @@ import pytest
 from backend_test import (
     ALIGNMENTS,
     HIDE_HYDROGENS,
+    assert_add_label,
     assert_align_to_reference,
     assert_cleanup,
     assert_doc_init,
@@ -112,6 +113,10 @@ def test_hide_hydrogens_special(hml_json: str) -> None:
 
 def test_highlight_from_json(hml_json: str) -> None:
     assert_highlight_from_json(hml_json, RDKitDocument)
+
+
+def test_add_label() -> None:
+    assert_add_label(RDKitDocument)
 
 
 def test_to_console() -> None:
