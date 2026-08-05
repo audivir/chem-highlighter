@@ -59,25 +59,6 @@ def test_get_rgba() -> None:
     assert a2 == 1.0
 
 
-def test_to_hmol_json_without_hml() -> None:
-    doc = RDKitMolecule.from_mol(mol_from_smiles("CCO"))
-    assert doc.get_hml_json() is None
-    json_str = doc.to_hmol_json()
-    decoded = msgspec.json.decode(json_str)
-    assert b'"mol"' in msgspec.json.encode(decoded)
-
-
-def test_to_hmol_json_with_hml(doc: HighlightBackendMolecule, hml_json: str) -> None:
-    doc.highlight_from_json(hml_json, False)
-    found_hml_json = doc.get_hml_json()
-    assert found_hml_json is not None
-    # Palette must be serialised into the JSON
-    assert "ff0000" in found_hml_json
-    json_str = doc.to_hmol_json()
-    assert "ff0000" in json_str
-    assert b'"mol"' in msgspec.json.encode(msgspec.json.decode(json_str))
-
-
 @pytest.mark.parametrize("hide_hydrogens", [False, True])
 def test_highlight_from_json(
     hide_hydrogens: bool, doc: HighlightBackendMolecule, hml_json: str

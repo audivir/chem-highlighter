@@ -134,7 +134,7 @@ def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
     return "\n".join(lines)
 
 
-def is_same_conformer(  # noqa: C901,PLR0912
+def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     mol_or_molblock_a: Chem.Mol | str,
     mol_or_molblock_b: Chem.Mol | str,
     atol: float,

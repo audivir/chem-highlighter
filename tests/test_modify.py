@@ -561,7 +561,7 @@ def test_flip_bond(
 
     q = flip_bond(q_orig, bond_ix, anchor_atom_ix, atol=atol)
 
-    assert is_same_conformer(q, r, atol=atol), visualize_conformers(q, q_orig)
+    assert is_same_conformer(q, r, atol=atol), visualize_conformers(q, q_orig)  # type: ignore[func-returns-value]
 
     q = flip_bond(q, bond_ix, anchor_atom_ix, atol=atol)
     assert is_same_conformer(q, q_orig, atol=atol)

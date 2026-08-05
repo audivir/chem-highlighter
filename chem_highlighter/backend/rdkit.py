@@ -36,7 +36,7 @@ Drawer: TypeAlias = "Draw.MolDraw2DCairo | Draw.MolDraw2DSVG"
 SENTINEL_ISOTOPE = 999
 
 
-def highlight_without_rings(
+def highlight_without_rings(  # noqa: PLR0913,PLR0917
     drawer: Drawer,
     hml: HML,
     mol: Chem.Mol,
@@ -107,7 +107,7 @@ def highlight_rings(
         draw_polygon(drawer, conf, ring_atom_ixs, color)
 
 
-def draw_mol(
+def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
     hml: HML | None,
     mol: Chem.Mol,
     output: Literal["png", "svg"],
@@ -385,7 +385,7 @@ class RDKitDocument(Document[RDKitMolecule]):
     def _split_bytes(cls, data: bytes, fmt: InputFormat) -> list[RDKitMolecule]:
         from rdkit import Chem
 
-        mols: list[Chem.Mol]
+        mols: list[Chem.Mol | None]
         if fmt == "SDF":
             buffer = BytesIO(data)
             with Chem.ForwardSDMolSupplier(buffer) as sds:
@@ -403,7 +403,7 @@ class RDKitDocument(Document[RDKitMolecule]):
         elif fmt == "SMILES":
             params = Chem.SmilesParserParams()
             params.removeHs = False  # type: ignore[assignment]
-            smiles_mol = Chem.MolFromSmiles(data.decode(), params)
+            smiles_mol: Chem.Mol | None = Chem.MolFromSmiles(data.decode(), params)
             mols = (
                 list(Chem.GetMolFrags(smiles_mol, asMols=True, sanitizeFrags=False))
                 if smiles_mol
@@ -414,10 +414,10 @@ class RDKitDocument(Document[RDKitMolecule]):
             # single-molecule backend's own construction/restrictions unchanged.
             return [RDKitMolecule.from_bytes(data, fmt)]
 
-        mols = [mol for mol in mols if mol is not None and mol.GetNumAtoms() >= 1]
-        if not mols:
+        valid_mols = [mol for mol in mols if mol is not None and mol.GetNumAtoms() >= 1]
+        if not valid_mols:
             raise ValueError(f"Invalid {fmt} input")
-        return [RDKitMolecule(mol) for mol in mols]
+        return [RDKitMolecule(mol) for mol in valid_mols]
 
     @override
     def _combined_export(self, fmt: Literal["SVG", "PNG"]) -> bytes:

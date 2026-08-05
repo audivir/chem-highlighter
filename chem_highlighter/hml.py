@@ -319,15 +319,6 @@ class HighlightBackendMolecule(ABC):
 
         return "".join(chars_out)
 
-    def to_hmol_json(self) -> str:
-        """Return a JSON-encoded of the molecule including its highlighting options."""
-        hmol = HMol(mol=self.to_molblock())
-        if hml_json := self.get_hml_json():
-            hml = msgspec.json.Decoder(HML).decode(hml_json)
-            for field in hml.__struct_fields__:
-                setattr(hmol, field, getattr(hml, field))
-        return msgspec.json.encode(hmol).decode()
-
 
 class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
     """A collection of one or more molecules parsed from a single input, laid out on a canvas.
@@ -437,8 +428,3 @@ class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
         if molecule_ix is not None:
             return self.molecule(molecule_ix).to_console(canonical=canonical)
         return ".".join(m.to_console(canonical=canonical) for m in self.molecules)
-
-    def to_hmol_json(self, molecule_ix: int | None = None) -> str:
-        """Return a JSON-encoded representation of the molecule including its highlighting options."""
-        ix = molecule_ix if molecule_ix is not None else 0
-        return self.molecule(ix).to_hmol_json()
