@@ -329,7 +329,7 @@ def draw_multiple(  # pragma: no cover
     backend: type[HighlightBackendMolecule] = RDKitMolecule,
 ) -> None:
     """Draw multiple groups of molecules in a grid."""
-    import imgkit
+    import imgkit  # type: ignore[import-untyped]
     import numpy as np
     import pandas as pd
 
