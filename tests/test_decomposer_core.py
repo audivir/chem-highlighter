@@ -184,8 +184,7 @@ def test_core_decompose_skip_cores_with_unknown_core_has_no_effect() -> None:
 
 
 def test_core_decompose_three_molecules_rgroup_substituents() -> None:
-    # Verify each molecule's combined R-group atoms match expectations.
-    # We check the SET of substituent atoms to avoid depending on which position
+    # Check the SET of substituent atoms to avoid depending on which position
     # RDKit assigns R1 vs R2 (that can change when more molecules are added).
     decomposed, _ = Core("OCCCO").decompose(["COCCCOS", "NOCCCOP", "COCCCON"])
     rdata = decomposed.build_rdata()

@@ -128,12 +128,8 @@ def test_flip_misaligned_bonds(
 def test_get_alignment_flips_and_transform_self_alignment_is_a_no_op(
     smiles: str, atol: float
 ) -> None:
-    """A symmetric molecule aligned to a molblock export of itself must not rotate/mirror.
-
-    Reproduces the reported `--reference "same_molecule.mol"` bug: Kabsch has no
-    preference between the identity transform and a symmetry-equivalent non-identity one
-    when both achieve the same (zero) RMSD.
-    """
+    # Regression test for the `--reference "same_molecule.mol"` bug: Kabsch has no
+    # preference between the identity transform and a symmetry-equivalent non-identity one.
     _, molblock = _mol(smiles)
     query = get_2d_mol(molblock, atol=atol)
     reference = get_2d_mol(molblock, atol=atol)

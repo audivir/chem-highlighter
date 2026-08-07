@@ -226,7 +226,6 @@ def test_recenter_mol(
     atol: float,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-
     mol = mol_from_smiles("CCO")
     rdDepictor.Compute2DCoords(mol)
 

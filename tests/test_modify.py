@@ -22,37 +22,16 @@ if TYPE_CHECKING:
 @pytest.mark.parametrize(
     ("flip_horizontal", "flip_vertical", "expected_matrix"),
     [
-        # flip_horizontal=True, flip_vertical=True
-        (
-            True,
-            True,
-            np.diag([-1.0, -1.0, 1.0, 1.0]),
-        ),
-        # flip_vertical=True (180-deg around Z-axis)
-        (
-            False,
-            True,
-            np.diag([1.0, -1.0, -1.0, 1.0]),
-        ),
-        # flip_horizontal=True (180-deg around X-axis)
-        (
-            True,
-            False,
-            np.diag([-1.0, 1.0, -1.0, 1.0]),
-        ),
-        # No flips (Identity)
-        (
-            False,
-            False,
-            np.diag([1.0, 1.0, 1.0, 1.0]),
-        ),
+        (True, True, np.diag([-1.0, -1.0, 1.0, 1.0])),
+        (False, True, np.diag([1.0, -1.0, -1.0, 1.0])),
+        (True, False, np.diag([-1.0, 1.0, -1.0, 1.0])),
+        (False, False, np.diag([1.0, 1.0, 1.0, 1.0])),
     ],
     ids=["flip_horizontal_and_vertical", "flip_vertical_only", "flip_horizontal_only", "no_flips"],
 )
 def test_make_transform_flips_only(
     flip_horizontal: bool, flip_vertical: bool, expected_matrix: NDArray[np.float64], atol: float
 ) -> None:
-    """Test standard axis inversions without any Z-axis rotations."""
     transform = make_transform(
         angle_deg=0.0, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
     )
@@ -62,7 +41,6 @@ def test_make_transform_flips_only(
 @pytest.mark.parametrize(
     ("angle_deg", "flip_horizontal", "flip_vertical", "expected_matrix"),
     [
-        # 90 deg, flip_horizontal=True, flip_vertical=True
         (
             90.0,
             True,
@@ -76,7 +54,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 90 deg, flip_vertical=True
         (
             90.0,
             False,
@@ -90,7 +67,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 90 deg, flip_horizontal=True
         (
             90.0,
             True,
@@ -104,7 +80,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 90 deg, no flips
         (
             90.0,
             False,
@@ -118,7 +93,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 180 deg, flip_horizontal=True, flip_vertical=True
         (
             180.0,
             True,
@@ -132,7 +106,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 180 deg, flip_horizontal=True
         (
             180.0,
             True,
@@ -146,7 +119,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 45 deg, no flips
         (
             45.0,
             False,
@@ -160,7 +132,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 45 deg, flip_horizontal=True
         (
             45.0,
             True,
@@ -174,7 +145,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 45 deg, flip_vertical=True
         (
             45.0,
             False,
@@ -188,7 +158,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # 45 deg, flip_horizontal=True, flip_vertical=True
         (
             45.0,
             True,
@@ -202,7 +171,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # Negative angle: -30 deg, flip_horizontal=True
         (
             -30.0,
             True,
@@ -216,7 +184,6 @@ def test_make_transform_flips_only(
                 ]
             ),
         ),
-        # Fractional angle: 12.5 deg, no flips
         (
             12.5,
             False,
@@ -253,7 +220,6 @@ def test_make_transform_with_angles(
     expected_matrix: NDArray[np.float64],
     atol: float,
 ) -> None:
-    """Test axis inversions stacked with Z-axis angular rotations."""
     result = make_transform(
         angle_deg=angle_deg, flip_horizontal=flip_horizontal, flip_vertical=flip_vertical
     )
@@ -263,8 +229,6 @@ def test_make_transform_with_angles(
 @pytest.mark.parametrize(
     ("matrix", "expected_horizontal_flip", "expected_angle_deg"),
     [
-        # Original: 90 deg, flip_horizontal=True, flip_vertical=True
-        # Equivalent to: 0 flips, 90 + 180 = 270 deg
         (
             np.array(
                 [
@@ -277,8 +241,6 @@ def test_make_transform_with_angles(
             0,
             270.0,
         ),
-        # Original: 90 deg, flip_vertical=True
-        # Equivalent to: 1 (Horizontal) flip, 90 + 180 = 270 deg
         (
             np.array(
                 [
@@ -291,7 +253,6 @@ def test_make_transform_with_angles(
             1,
             270.0,
         ),
-        # Original: 90 deg, flip_horizontal=True
         (
             np.array(
                 [
@@ -304,7 +265,6 @@ def test_make_transform_with_angles(
             1,
             90.0,
         ),
-        # Original: 90 deg, no flips
         (
             np.array(
                 [
@@ -317,8 +277,6 @@ def test_make_transform_with_angles(
             0,
             90.0,
         ),
-        # Original: 180 deg, flip_horizontal=True, flip_vertical=True
-        # Equivalent to: 0 flips, 180 + 180 = 0 deg
         (
             np.array(
                 [
@@ -331,7 +289,6 @@ def test_make_transform_with_angles(
             0,
             0.0,
         ),
-        # Original: 180 deg, flip_horizontal=True
         (
             np.array(
                 [
@@ -344,7 +301,6 @@ def test_make_transform_with_angles(
             1,
             180.0,
         ),
-        # Original: 45 deg, no flips
         (
             np.array(
                 [
@@ -357,7 +313,6 @@ def test_make_transform_with_angles(
             0,
             45.0,
         ),
-        # Original: 45 deg, flip_horizontal=True
         (
             np.array(
                 [
@@ -370,8 +325,6 @@ def test_make_transform_with_angles(
             1,
             45.0,
         ),
-        # Original: 45 deg, flip_vertical=True
-        # Equivalent to: 1 (Horizontal) flip, 45 + 180 = 225 deg
         (
             np.array(
                 [
@@ -384,8 +337,6 @@ def test_make_transform_with_angles(
             1,
             225.0,
         ),
-        # Original: 45 deg, flip_horizontal=True, flip_vertical=True
-        # Equivalent to: 0 flips, 45 + 180 = 225 deg
         (
             np.array(
                 [
@@ -398,8 +349,6 @@ def test_make_transform_with_angles(
             0,
             225.0,
         ),
-        # Original: Negative angle: -30 deg, flip_horizontal=True
-        # Equivalent to: 1 (Horizontal) flip, 330 deg
         (
             np.array(
                 [
@@ -412,7 +361,6 @@ def test_make_transform_with_angles(
             1,
             330.0,
         ),
-        # Original: Fractional angle: 12.5 deg, no flips
         (
             np.array(
                 [
@@ -447,7 +395,6 @@ def test_parse_transform(
     expected_angle_deg: float,
     atol: float,
 ) -> None:
-    """Test extracting angle and flips from transformation matrices."""
     horizontal_flip, angle_deg = parse_transform(matrix, atol=atol)
 
     assert horizontal_flip == expected_horizontal_flip
@@ -568,7 +515,6 @@ def test_flip_bond(
 
 
 def test_flip_bond_errors(atol: float) -> None:
-
     benzenelike = Chem.MolFromSmiles("ClCc1ccccc1")
     Compute2DCoords(benzenelike)
     with pytest.raises(ValueError, match="Only single bonds can be flipped"):
