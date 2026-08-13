@@ -51,6 +51,22 @@ def _rect_mol(corners: Sequence[tuple[float, float]]) -> Chem.Mol:
     return mol
 
 
+def _chain_mol(symbols: Sequence[str], positions: Sequence[tuple[float, float, float]]) -> Chem.Mol:
+    """Build a straight-chain mol with explicit atom order and 3D positions."""
+    mol = Chem.RWMol()
+    for symbol in symbols:
+        mol.AddAtom(Chem.Atom(symbol))
+    for ix in range(len(symbols) - 1):
+        mol.AddBond(ix, ix + 1, Chem.BondType.SINGLE)
+    conf = Chem.Conformer(len(symbols))
+    for ix, (x, y, z) in enumerate(positions):
+        conf.SetAtomPosition(ix, Point3D(x, y, z))
+    mol.AddConformer(conf)
+    result = mol.GetMol()
+    Chem.SanitizeMol(result)
+    return result
+
+
 def _assert_angle_close(actual: float, expected: float, atol: float = 0.1) -> None:
     """Assert two angles (in degrees) match modulo the bounding box's 180 degree period."""
     diff = abs(actual - expected) % 180.0
@@ -116,6 +132,32 @@ def test_flip_misaligned_bonds(
             found_flips = flip_misaligned_bonds(q, q_orig, find_mcs(q, q_orig), atol=atol)
             assert found_flips == list(flips)
             assert is_same_conformer(q, q_orig, atol=atol)
+
+
+@pytest.mark.xfail(strict=True, reason="flip_misaligned_bonds mixes up query/reference indices")
+def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float) -> None:
+    """flip_misaligned_bonds must pick the right anchor even when query and reference use
+    different atom numbering for the same structure."""
+    # Chain Cl-C-C-F: one rotatable bond, so there's exactly one flip decision to check.
+    b, c, a = (0.0, 0.0, 0.0), (1.5, 0.0, 0.0), (-1.0, 1.3, 0.0)
+
+    def d_at(dihedral_deg: float) -> tuple[float, float, float]:
+        theta = np.radians(dihedral_deg)
+        return (c[0] + 1.0, 1.3 * np.cos(theta), 1.3 * np.sin(theta))
+
+    # query: Cl-Ca-Cb-F, dihedral 0.
+    query = _chain_mol(["Cl", "C", "C", "F"], [a, b, c, d_at(0.0)])
+    # reference: same mol, atoms numbered in reverse, dihedral 170 (forces the flip branch).
+    reference = _chain_mol(["F", "C", "C", "Cl"], [d_at(170.0), c, b, a])
+
+    mcs_match = find_mcs(query, reference)
+    # query's F maps to reference's F, query's Cb to reference's Cb.
+    assert mcs_match == {0: 3, 1: 2, 2: 1, 3: 0}
+
+    flips = flip_misaligned_bonds(query, reference, mcs_match, atol=atol)
+
+    # F moved more than the other side, so the flip should anchor at Ca.
+    assert flips == [(1, 1)]
 
 
 @pytest.mark.parametrize(
