@@ -11,6 +11,7 @@ import matplotlib as mpl
 import msgspec
 from typing_extensions import Self, override
 
+from chem_highlighter.align import get_2d_mol, get_alignment_flips_and_transform, get_best_fit_angle
 from chem_highlighter.hml import (
     HML,
     Document,
@@ -20,7 +21,7 @@ from chem_highlighter.hml import (
     OutputFormat,
     OutputFormatNotSupported,
 )
-from chem_highlighter.modify import apply_transform, flip_bond
+from chem_highlighter.modify import apply_transform, flip_bond, parse_transform
 from chem_highlighter.utils import get_atoms, get_high_precision_v3000, get_png_render_options
 
 if TYPE_CHECKING:
@@ -316,12 +317,21 @@ class RDKitMolecule(HighlightBackendMolecule):
         return export_rdkit_molecule(self, fmt, use_v2000)
 
     @override
-    def align_to_reference_callback(
-        self, flips: list[tuple[int, int]], global_flip: bool, angle: float
-    ) -> None:
-        """Align the underlying molecule to a reference molecule."""
+    def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
+        """compute the alignment ops to fit a bounding box ratio via RDKit and apply them."""
         atol = 1e-5
-        query = self.mol
+        query = get_2d_mol(self.to_molblock(), atol=atol)
+        angle = get_best_fit_angle(query, (width, height))
+        self.mol = apply_transform(query, angle, flip_horizontal=False, atol=atol)
+
+    @override
+    def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+        """compute the alignment ops against a reference molblock via RDKit and apply them."""
+        atol = 1e-5
+        query = get_2d_mol(self.to_molblock(), atol=atol)
+        reference = get_2d_mol(reference_molblock, atol=atol)
+        flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
+        global_flip, angle = parse_transform(transform, atol=atol)
         for bond_ix, anchor_atom_ix in flips:
             query = flip_bond(query, bond_ix, anchor_atom_ix, atol=atol)
         query = apply_transform(query, angle, flip_horizontal=global_flip, atol=atol)

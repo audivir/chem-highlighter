@@ -6,7 +6,6 @@ import msgspec
 import pytest
 from utils import assert_benzene_kekulized
 
-from chem_highlighter.align import get_alignment_ops_from_molblock
 from chem_highlighter.backend.rdkit import RDKitMolecule
 from chem_highlighter.hml import HML, HighlightBackendMolecule
 from chem_highlighter.utils import mol_from_smiles
@@ -156,17 +155,12 @@ def test_hide_hydrogens_raises_after_highlight_from_json_with_hide_hydrogens(
         doc.hide_hydrogens()
 
 
-def test_callback_methods_bypass_the_guard(
-    doc: HighlightBackendMolecule, hml_json: str, atol: float
-) -> None:
+def test_callback_methods_bypass_the_guard(doc: HighlightBackendMolecule, hml_json: str) -> None:
     doc.cleanup_callback()
     doc.cleanup_callback()
 
-    flips, global_flip, angle = get_alignment_ops_from_molblock(
-        doc.to_molblock(), doc.to_molblock(), atol=atol
-    )
-    doc.align_to_reference_callback(flips, global_flip, angle)
-    doc.align_to_reference_callback(flips, global_flip, angle)
+    doc.align_to_reference_mol_callback(doc.to_molblock())
+    doc.align_to_reference_mol_callback(doc.to_molblock())
 
     doc.hide_hydrogens_callback()
     doc.hide_hydrogens_callback()

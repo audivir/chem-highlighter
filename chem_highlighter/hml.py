@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Generic, Literal, TypeAlias, final
 import msgspec
 from typing_extensions import Self, TypeVar
 
-from chem_highlighter.align import get_alignment_ops_from_molblock
+from chem_highlighter.align import parse_possible_ratio
 from chem_highlighter.backend.map_tokens import map_smiles_tokens
 from chem_highlighter.utils import (
     RESET_COLOR,
@@ -141,10 +141,12 @@ class HighlightBackendMolecule(ABC):
         return self.export(fmt, use_v2000).decode()
 
     @abstractmethod
-    def align_to_reference_callback(
-        self, flips: list[tuple[int, int]], global_flip: bool, angle: float
-    ) -> None:
-        """Run after alignment checks are done by `align_to_reference`."""
+    def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
+        """compute the alignment ops to fit a bounding box ratio and apply them."""
+
+    @abstractmethod
+    def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+        """compute the alignment ops against a reference molblock and apply them."""
 
     @final
     def align_to_reference(self, reference: str) -> Self:
@@ -152,10 +154,11 @@ class HighlightBackendMolecule(ABC):
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
             raise ValueError("Already aligned")
-        flips, global_flip, angle = get_alignment_ops_from_molblock(
-            self.to_molblock(), reference, atol=1e-5
-        )
-        self.align_to_reference_callback(flips, global_flip, angle)
+        ratio = parse_possible_ratio(reference)
+        if ratio is not None:
+            self.align_to_reference_ratio_callback(*ratio)
+        else:
+            self.align_to_reference_mol_callback(reference)
         self.set_edit_state(kekulized, True, hydrogens_hidden)
         return self
 
