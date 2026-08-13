@@ -134,7 +134,6 @@ def test_flip_misaligned_bonds(
             assert is_same_conformer(q, q_orig, atol=atol)
 
 
-@pytest.mark.xfail(strict=True, reason="flip_misaligned_bonds mixes up query/reference indices")
 def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float) -> None:
     """flip_misaligned_bonds must pick the right anchor even when query and reference use
     different atom numbering for the same structure."""
@@ -156,7 +155,7 @@ def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float
 
     flips = flip_misaligned_bonds(query, reference, mcs_match, atol=atol)
 
-    # F moved more than the other side, so the flip should anchor at Ca.
+    # F moved more than the other side, so the flip anchors at Ca.
     assert flips == [(1, 1)]
 
 

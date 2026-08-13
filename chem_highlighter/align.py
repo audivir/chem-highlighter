@@ -159,11 +159,11 @@ def flip_misaligned_bonds(
             # would otherwise bias an absolute-position comparison toward
             # picking the wrong side.
             vec_a_q = get_atom_position(conf_q, q_idx_a) - get_atom_position(conf_q, q_idx_b)
-            vec_a_r = get_atom_position(conf_r, q_idx_a) - get_atom_position(conf_r, q_idx_b)
+            vec_a_r = get_atom_position(conf_r, idx_a) - get_atom_position(conf_r, idx_b)
             dist_a = vec_a_q.Distance(vec_a_r)
 
             vec_d_q = get_atom_position(conf_q, q_idx_d) - get_atom_position(conf_q, q_idx_c)
-            vec_d_r = get_atom_position(conf_r, q_idx_d) - get_atom_position(conf_r, q_idx_c)
+            vec_d_r = get_atom_position(conf_r, idx_d) - get_atom_position(conf_r, idx_c)
             dist_d = vec_d_q.Distance(vec_d_r)
 
             bond_ix = query.GetBondBetweenAtoms(q_idx_b, q_idx_c).GetIdx()
