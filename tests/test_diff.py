@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.diff."""
+"""Tests for the diff module."""
 
 from __future__ import annotations
 

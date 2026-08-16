@@ -1,4 +1,4 @@
-"""Modify a molecule, namely rotate, mirror, or flip bonds."""
+"""Provide utilities to rotate, mirror, or flip molecular bonds."""
 
 from __future__ import annotations
 
@@ -29,12 +29,12 @@ def make_transform(
     flip_horizontal: bool = False,
     flip_vertical: bool = False,
 ) -> NDArray[np.float64]:
-    """Create a 2D transform matrix.
+    """Create 2D transform matrix.
 
     Args:
         angle_deg: Counterclockwise rotation angle in degrees.
-        flip_horizontal: Mirror about the vertical axis.
-        flip_vertical: Mirror about the horizontal axis.
+        flip_horizontal: Whether to mirror about the vertical axis.
+        flip_vertical: Whether to mirror about the horizontal axis.
     """
     import numpy as np
 
@@ -58,17 +58,17 @@ def make_transform(
 
 
 def parse_transform(matrix: NDArray[np.float64], atol: float) -> tuple[bool, float]:
-    """Extract the reflection state and 2D rotation angle from a 4x4 matrix.
+    """Extract reflection state and 2D rotation angle from 4x4 matrix.
 
-    Arguments:
+    Args:
         matrix: 4x4 transformation matrix.
-        atol: Tolerance to match our constraints.
+        atol: Absolute tolerance for constraint validation.
 
     Returns:
-        A tuple whether a horizontal flip is necessary and the rotation angle in degrees.
+        Tuple containing whether a horizontal flip is required and the rotation angle in degrees.
 
     Raises:
-        ValueError if the matrix is not 4x4 or does not represent a valid rigid transformation.
+        ValueError: If the matrix is not 4x4 or is not a valid rigid transformation.
     """
     import numpy as np
 
@@ -77,7 +77,7 @@ def parse_transform(matrix: NDArray[np.float64], atol: float) -> tuple[bool, flo
 
     m_2d = matrix[:2, :2]
 
-    # Check that there is no coupling between XY and Z.
+    # verify no coupling between XY and Z planes.
     m_3d = matrix[:3, :3]
     if not np.allclose(m_3d[:2, 2], 0, atol=atol) or not np.allclose(
         m_3d[2, :2], 0, atol=atol
@@ -88,18 +88,16 @@ def parse_transform(matrix: NDArray[np.float64], atol: float) -> tuple[bool, flo
 
     horizontal_flip = False
 
-    # Remove a reflection, if present, before extracting the angle.
-    # We standardize all 2D reflections to a horizontal flip (negating the X column).
+    # remove reflection if present and standardize to a horizontal flip by negating the X column.
     if det < 0:
         horizontal_flip = True
-        # Undo the horizontal flip by multiplying by a matrix that negates the first column
+        # undo horizontal flip by negating the first column.
         m_2d = m_2d @ np.diag([-1.0, 1.0])
 
     if not np.isclose(np.linalg.det(m_2d), 1.0, atol=atol):  # pragma: no cover
         raise ValueError("Matrix 2D component does not represent a valid rigid transformation.")
 
-    # Based on make_transform structure [[c, s], [-s, c]]
-    # c = m_2d[0, 0] and s = m_2d[0, 1]
+    # extract cosine and sine components from the 2D rotation submatrix.
     angle_rad = np.arctan2(m_2d[0, 1], m_2d[0, 0])
 
     return horizontal_flip, float(np.degrees(angle_rad) % 360.0)
@@ -114,20 +112,19 @@ def apply_transform(  # noqa: PLR0913
     recenter: Literal["origin", "previous", "none"] = "previous",
     atol: float,
 ) -> Chem.Mol:
-    """Rotate and/or mirror a (flat, z=0) conformer within its own plane.
+    """Rotate or mirror a flat (z=0) conformer within its own plane.
 
     Args:
         mol: Molecule to transform.
         angle_deg: Counterclockwise rotation angle in degrees.
         flip_horizontal: Mirror about the vertical axis.
         flip_vertical: Mirror about the horizontal axis.
-        recenter: if 'origin' re-center the result so its bounding box sits on the
-            origin, if 'previous' keep the molecule's bounding-box center where it was before,
-            else do not recenter the molecule.
-        atol: Tolerance for z coordinate warning.
+        recenter: Centering strategy: 'origin' moves bounding box center to origin,
+            'previous' maintains original center, 'none' disables recentering.
+        atol: Tolerance for z coordinate validation.
 
     Raises:
-        ValueError: If `mol`'s conformer is not flat (z != 0).
+        ValueError: If the conformer is not flat.
     """
     import numpy as np
     from rdkit import Chem
@@ -155,16 +152,16 @@ def flip_bond(
     anchor_atom_ix: int,
     atol: float,
 ) -> Chem.Mol:
-    """Flip a rotatable bond by 180°.
+    """Flip rotatable bond by 180°.
 
     Args:
-        mol: Molecule to flip a bond of.
-        bond_ix: Bond index to rotate.
-        anchor_atom_ix: Atom on the bond that should remain fixed.
+        mol: Molecule containing the bond.
+        bond_ix: Index of the bond to rotate.
+        anchor_atom_ix: Index of the atom on the bond to remain fixed.
         atol: Tolerance for shift warning.
 
     Returns:
-        A new molecule with the flipped bond.
+        Molecule with the flipped bond.
     """
     from rdkit import Chem
     from rdkit.Chem import rdMolTransforms

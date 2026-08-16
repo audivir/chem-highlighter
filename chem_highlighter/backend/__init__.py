@@ -1,1 +1,1 @@
-"""Namespace package to add backends for highlighting."""
+"""Namespace package for highlighting backends."""

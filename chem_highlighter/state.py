@@ -1,4 +1,4 @@
-"""Keep and restore a state of RDKit atoms."""
+"""Manages preservation and restoration of RDKit atom states."""
 
 from __future__ import annotations
 
@@ -15,10 +15,7 @@ if TYPE_CHECKING:
 
 
 class AtomState(msgspec.Struct):
-    """Store the state of an atom.
-
-    The classes' `freeze`/`unfreeze`-methods are meant to be used together as a pair.
-    """
+    """Encapsulates state of RDKit atom."""
 
     num_explicit_hs: int
     no_implicit: bool
@@ -27,7 +24,7 @@ class AtomState(msgspec.Struct):
 
     @classmethod
     def from_atom(cls, atom: Chem.Atom) -> Self:
-        """Create an atom state from an RDKit atom."""
+        """Create atom state from RDKit atom."""
         return cls(
             atom.GetNumExplicitHs(),
             atom.GetNoImplicit(),
@@ -36,7 +33,7 @@ class AtomState(msgspec.Struct):
         )
 
     def to_atom(self, atom: Chem.Atom) -> None:
-        """Set the atom state to an RDKit atom."""
+        """Apply stored state to RDKit atom."""
         atom.SetNumExplicitHs(self.num_explicit_hs)
         atom.SetNoImplicit(self.no_implicit)
         atom.SetFormalCharge(self.formal_charge)
@@ -44,14 +41,10 @@ class AtomState(msgspec.Struct):
 
     @classmethod
     def freeze(cls, mol: Chem.Mol) -> str:
-        """Store each atom's state in a 'state_{tag}' property.
-
-        Mutates `mol` in place: every atom is given a new property named
-        after the returned tag. The matching `unfreeze` call must always be
-        made to remove it again.
+        """Store each atom's state as property on the molecule.
 
         Returns:
-            The property's tag.
+            The unique property tag used for storage.
         """
         tag = f"state_{uuid.uuid4()}"
         for atom in get_atoms(mol):
@@ -61,13 +54,10 @@ class AtomState(msgspec.Struct):
 
     @classmethod
     def unfreeze(cls: type[Self], mol: Chem.Mol, tag: str) -> Chem.Mol:  # type: ignore[redundant-self]
-        """Reset to the previous states and remove untagged molecules.
+        """Restore atom states and remove atoms added after freezing.
 
-        Removes the `tag` property (added by `freeze`) from every atom that
-        carries it and restores its stored state; atoms without the tag are
-        assumed to have been added after `freeze` and are removed. This
-        clears the property only from `mol`'s own atoms. Use this function's
-        output instead of the original `mol` passed to `freeze`.
+        Removes the specified tag from atoms and restores their stored state. Atoms
+        lacking the tag are removed from the molecule.
 
         Returns:
             The reset molecule.

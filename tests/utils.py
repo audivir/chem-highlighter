@@ -1,4 +1,4 @@
-"""Configuration and fixtures for tests."""
+"""Test configuration and fixtures."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ FIXTURES_ORDER = [FIXTURES]
 
 
 def png_dimensions(data: bytes) -> tuple[int, int]:
-    """Read the (width, height) out of a PNG's IHDR chunk."""
+    """Extract width and height from PNG IHDR chunk."""
     width, height = struct.unpack(">II", data[16:24])
     return width, height
 
 
 def png_has_transparency(png_bytes: bytes) -> bool:
-    """Whether the PNG data contains any semi-transparent or fully transparent pixels."""
+    """Determine if PNG data contains semi-transparent or fully transparent pixels."""
     img = Image.open(BytesIO(png_bytes))
 
     if img.mode not in ("RGBA", "LA") and "transparency" not in img.info:
@@ -47,7 +47,7 @@ def png_has_transparency(png_bytes: bytes) -> bool:
 
 @contextlib.contextmanager
 def set_env(**variables: str | None) -> Generator[None]:
-    """Temporarily set env vars, restoring (or unsetting) the previous values afterward."""
+    """Temporarily set environment variables and restore their previous states upon exit."""
 
     def _set_env(**inner_variables: str | None) -> None:
         for name, value in inner_variables.items():
@@ -81,7 +81,7 @@ def xfail_param(value: object, reason: str) -> ParameterSet:  # pragma: no cover
 
 
 def mol_from_explicit_smiles(smiles: str) -> Chem.Mol:
-    """Parse a SMILES string without collapsing its explicit hydrogen atoms to implicit ones."""
+    """Parse SMILES string while preserving explicit hydrogen atoms."""
     params = Chem.SmilesParserParams()
     params.removeHs = False  # type: ignore[assignment]
     return Chem.MolFromSmiles(smiles, params)
@@ -98,7 +98,7 @@ def assert_mols_equal(result: Chem.Mol | str, expected: Chem.Mol | str) -> None:
 
 
 def extract_bond_codes(molblock: str) -> list[int]:
-    """Extract the bond type codes from a V3000 molblock."""
+    """Extract bond type codes from V3000 molblock."""
     codes = []
     in_bond_block = False
     for line in molblock.splitlines():

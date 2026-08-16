@@ -15,7 +15,7 @@ Diff_T: TypeAlias = Literal["equal", "delete", "insert"]
 
 
 def get_diff(s1: str, s2: str) -> tuple[list[tuple[Diff_T, str]], list[tuple[Diff_T, str]]]:
-    """Create diff information of two strings."""
+    """Compute difference between two strings."""
     matcher = difflib.SequenceMatcher(None, s1, s2)
     out_s1: list[tuple[Diff_T, str]] = []
     out_s2: list[tuple[Diff_T, str]] = []
@@ -35,7 +35,7 @@ def get_diff(s1: str, s2: str) -> tuple[list[tuple[Diff_T, str]], list[tuple[Dif
 def get_smiles_diff(
     query: str, new_smiles: str, n_augmentations: int = 100, random_seed: int = 42
 ) -> tuple[list[tuple[Diff_T, str]], list[tuple[Diff_T, str]]]:
-    """Create smallest diff information of two SMILES strings."""
+    """Compute minimal difference between two SMILES strings."""
     from rdkit import Chem
 
     mol = Chem.MolFromSmiles(new_smiles)
@@ -54,7 +54,7 @@ def get_smiles_diff(
 def colorize_smiles_diff(
     query: str, new_smiles: str, n_augmentations: int = 100, random_seed: int = 42
 ) -> tuple[str, str]:
-    """Create colorized diff of two SMILES strings."""
+    """Generate colorized difference strings for two SMILES strings."""
 
     def _colorize(diff_texts: Sequence[tuple[Diff_T, str]]) -> str:
         out_parts: list[str] = []

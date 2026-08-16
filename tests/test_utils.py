@@ -43,9 +43,9 @@ if TYPE_CHECKING:
 @pytest.mark.parametrize(
     ("smiles", "expected_atoms", "expected_bonds"),
     [
-        ("CCO", 3, 2),  # ethanol: C-C-O
-        ("C1CCCCC1", 6, 6),  # cyclohexane: saturated 6-ring
-        ("c1ccccc1", 6, 6),  # benzene: aromatic 6-ring
+        ("CCO", 3, 2),  # ethanol
+        ("C1CCCCC1", 6, 6),  # cyclohexane
+        ("c1ccccc1", 6, 6),  # benzene
         ("CC(=O)O", 4, 3),  # acetic acid
     ],
 )
@@ -58,9 +58,9 @@ def test_mol_from_smiles_valid(smiles: str, expected_atoms: int, expected_bonds:
 @pytest.mark.parametrize(
     "invalid_smiles",
     [
-        "ZZZ",  # no such element
-        "",  # empty string → 0-atom mol
-        "invalid",  # gibberish
+        "ZZZ",  # invalid element
+        "",  # empty string
+        "invalid",
     ],
 )
 def test_mol_from_smiles_invalid_raises(invalid_smiles: str) -> None:
@@ -70,14 +70,14 @@ def test_mol_from_smiles_invalid_raises(invalid_smiles: str) -> None:
 
 @pytest.mark.parametrize("smiles", ["CCO", "CCC", "C1=CC=CC=C1", "c1ccccc1", "CC(=O)O"])
 def test_mol_to_smiles(smiles: str) -> None:
-    # Converting to mol and back must give an equivalent molecule.
+    # round-trip conversion must preserve molecular equivalence.
     mol = mol_from_smiles(smiles)
     result = mol_to_smiles(mol)
     assert_mols_equal(result, smiles)
 
 
 def test_mol_to_smiles_empty_mol_raises() -> None:
-    # An empty (0-atom) molecule has no valid SMILES representation.
+    # empty molecule has no valid SMILES representation.
     empty = Chem.RWMol()
     with pytest.raises(ValueError, match="Empty SMILES"):
         mol_to_smiles(empty)
@@ -86,8 +86,8 @@ def test_mol_to_smiles_empty_mol_raises() -> None:
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        ("CC(C)", "CC(C)"),  # When given a string, the pair stores it verbatim (not canonicalized).
-        (  # When given a Mol, the stored SMILES is the canonical form.
+        ("CC(C)", "CC(C)"),  # store string verbatim without canonicalization.
+        (  # store canonical SMILES when given a Mol.
             Chem.MolFromSmiles("CCC"),
             "CCC",
         ),
@@ -122,8 +122,8 @@ def test_get_bonds() -> None:
 @pytest.mark.parametrize(
     ("ix", "n_neighbors"),
     [
-        (0, 1),  # In CCO, atom 0 (first C) is bonded only to atom 1 (second C).
-        (1, 2),  # In CCO, atom 1 (second C) is bonded to atom 0 (C) and atom 2 (O).
+        (0, 1),  # atom 0 is bonded only to atom 1.
+        (1, 2),  # atom 1 is bonded to atoms 0 and 2.
     ],
 )
 def test_get_neighbors(ix: int, n_neighbors: int) -> None:
@@ -183,7 +183,7 @@ def test_is_conformer_positions(atol: float) -> None:
     move_molecule(ethanol_copy_conf, np.array([0.5 * atol, 0.0, 0.0]))
     assert is_same_conformer(ethanol, ethanol_copy, atol=atol)
 
-    # cumulative offset from the original positions is now 2 * atol
+    # cumulative offset is now 2 * atol.
     move_molecule(ethanol_copy_conf, np.array([1.5 * atol, 0.0, 0.0]))
     assert not is_same_conformer(ethanol, ethanol_copy, atol=atol)
 
@@ -281,10 +281,10 @@ def test_are_bonds_equal() -> None:
     assert are_bonds_equal(single_bond, other_single_bond)
 
     double_bond = mol_from_smiles("C=CO").GetBondWithIdx(0)
-    assert not are_bonds_equal(single_bond, double_bond)  # different bond type
+    assert not are_bonds_equal(single_bond, double_bond)  # different bond type.
 
     aromatic_bond = mol_from_smiles("c1ccccc1").GetBondWithIdx(0)
-    assert not are_bonds_equal(single_bond, aromatic_bond)  # different aromaticity
+    assert not are_bonds_equal(single_bond, aromatic_bond)  # different aromaticity.
 
 
 def test_get_ansi_color() -> None:

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 def _mol(smiles: str) -> tuple[Chem.Mol, str]:
-    """Return a RDKit molecule and a V2000 mol block with 2D coordinates for *smiles*."""
+    """Generate RDKit molecule and V2000 mol block with 2D coordinates from SMILES string."""
     mol = Chem.MolFromSmiles(smiles)
     rdDepictor.SetPreferCoordGen(True)
     rdDepictor.Compute2DCoords(mol)
@@ -36,14 +36,14 @@ def _mol(smiles: str) -> tuple[Chem.Mol, str]:
 
 
 def _3d_mol(smiles: str) -> tuple[Chem.Mol, str]:
-    """Like _mol but with 3D coordinates (EmbedMolecule)."""
+    """Generate RDKit molecule and V3000 mol block with 3D coordinates from SMILES string."""
     mol = Chem.MolFromSmiles(smiles)
     rdDistGeom.EmbedMolecule(mol)
     return mol, Chem.MolToMolBlock(mol, kekulize=False, forceV3000=True)
 
 
 def _rect_mol(corners: Sequence[tuple[float, float]]) -> Chem.Mol:
-    """Build a (bond-free positioning of) a mol with one atom per (x, y) corner."""
+    """Create molecule with one atom at each specified (x, y) coordinate."""
     mol, _ = _mol("C" * len(corners))
     conf = mol.GetConformer()
     for ix, (x, y) in enumerate(corners):
@@ -52,7 +52,7 @@ def _rect_mol(corners: Sequence[tuple[float, float]]) -> Chem.Mol:
 
 
 def _chain_mol(symbols: Sequence[str], positions: Sequence[tuple[float, float, float]]) -> Chem.Mol:
-    """Build a straight-chain mol with explicit atom order and 3D positions."""
+    """Create straight-chain molecule with specified atom order and 3D positions."""
     mol = Chem.RWMol()
     for symbol in symbols:
         mol.AddAtom(Chem.Atom(symbol))
@@ -68,32 +68,31 @@ def _chain_mol(symbols: Sequence[str], positions: Sequence[tuple[float, float, f
 
 
 def _assert_angle_close(actual: float, expected: float, atol: float = 0.1) -> None:
-    """Assert two angles (in degrees) match modulo the bounding box's 180 degree period."""
+    """Assert that two angles in degrees match modulo 180."""
     diff = abs(actual - expected) % 180.0
     assert min(diff, 180.0 - diff) < atol
 
 
 def test_get_2d_mol(atol: float) -> None:
-    mol, molblock = _mol("CCC")
-    assert get_2d_mol(molblock, atol=atol).GetNumAtoms() == 3  # from mol block string
-    assert get_2d_mol(mol, atol=atol).GetNumAtoms() == 3  # from Chem.Mol directly
+    mol, _ = _mol("CCC")
+    assert get_2d_mol(mol, atol=atol).GetNumAtoms() == 3
 
 
 def test_get_2d_mol_raises_when_invalid(atol: float) -> None:
-    with pytest.raises(ValueError, match="Invalid molblock"):
-        get_2d_mol("this is not a molblock", atol=atol)
     with pytest.raises(ValueError, match="No coordinates available for molecule"):
-        get_2d_mol(mol_from_smiles("CCC"), atol=atol)  # SMILES-parsed mol has no conformer
+        get_2d_mol(mol_from_smiles("CCC"), atol=atol)  # smiiles-parsed molecule lacks a conformer.
     with pytest.raises(ValueError, match="Molecule is a 3D molecule"):
-        get_2d_mol(_3d_mol("C1CCCCC1")[1], atol=atol)  # cyclohexane chair has non-zero Z
+        get_2d_mol(
+            _3d_mol("C1CCCCC1")[0], atol=atol
+        )  # cyclohexane chair has non-zero z-coordinates.
 
 
 @pytest.mark.parametrize(
     ("smiles_q", "smiles_r", "n_mcs"),
     [
-        ("CCO", "CCCO", 3),  # ethanol in propanol: 3 atoms shared
-        ("c1ccccc1", "Cc1ccccc1", 6),  # benzene ring in toluene: 6 atoms
-        ("CCCO", "CCCCO", 4),  # propanol in butanol: 4 atoms
+        ("CCO", "CCCO", 3),  # ethanol and propanol share 3 atoms.
+        ("c1ccccc1", "Cc1ccccc1", 6),  # benzene and toluene share 6 atoms.
+        ("CCCO", "CCCCO", 4),  # propanol and butanol share 4 atoms.
     ],
 )
 def test_find_mcs(smiles_q: str, smiles_r: str, n_mcs: int) -> None:
@@ -135,45 +134,43 @@ def test_flip_misaligned_bonds(
 
 
 def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float) -> None:
-    """flip_misaligned_bonds must pick the right anchor even when query and reference use
-    different atom numbering for the same structure."""
-    # Chain Cl-C-C-F: one rotatable bond, so there's exactly one flip decision to check.
+    """Verify flip_misaligned_bonds selects correct anchor when query and reference use different atom numbering."""
+    # Cl-C-C-F chain with one rotatable bond to test a single flip decision.
     b, c, a = (0.0, 0.0, 0.0), (1.5, 0.0, 0.0), (-1.0, 1.3, 0.0)
 
     def d_at(dihedral_deg: float) -> tuple[float, float, float]:
         theta = np.radians(dihedral_deg)
         return (c[0] + 1.0, 1.3 * np.cos(theta), 1.3 * np.sin(theta))
 
-    # query: Cl-Ca-Cb-F, dihedral 0.
+    # query Cl-Ca-Cb-F chain with 0 degree dihedral.
     query = _chain_mol(["Cl", "C", "C", "F"], [a, b, c, d_at(0.0)])
-    # reference: same mol, atoms numbered in reverse, dihedral 170 (forces the flip branch).
+    # reference Cl-Ca-Cb-F chain with reversed atom numbering and 170 degree dihedral to force a flip.
     reference = _chain_mol(["F", "C", "C", "Cl"], [d_at(170.0), c, b, a])
 
     mcs_match = find_mcs(query, reference)
-    # query's F maps to reference's F, query's Cb to reference's Cb.
+    # map query atoms to reference atoms in reverse order.
     assert mcs_match == {0: 3, 1: 2, 2: 1, 3: 0}
 
     flips = flip_misaligned_bonds(query, reference, mcs_match, atol=atol)
 
-    # F moved more than the other side, so the flip anchors at Ca.
+    # anchor flip at Ca because F exhibits greater displacement.
     assert flips == [(1, 1)]
 
 
 @pytest.mark.parametrize(
     "smiles",
     [
-        "c1ccccc1",  # benzene: D6h symmetry, plenty of zero-RMSD non-identity superpositions
-        "CCO",  # ethanol: no symmetry, sanity check the same code path on an asymmetric case
+        "c1ccccc1",  # benzene: D6h symmetry with multiple zero-RMSD non-identity superpositions.
+        "CCO",  # ethanol: asymmetric case to verify code path.
     ],
 )
 def test_get_alignment_flips_and_transform_self_alignment_is_a_no_op(
     smiles: str, atol: float
 ) -> None:
-    # Regression test for the `--reference "same_molecule.mol"` bug: Kabsch has no
-    # preference between the identity transform and a symmetry-equivalent non-identity one.
-    _, molblock = _mol(smiles)
-    query = get_2d_mol(molblock, atol=atol)
-    reference = get_2d_mol(molblock, atol=atol)
+    # verify Kabsch algorithm prefers identity transform over symmetry-equivalent alternatives.
+    mol, _ = _mol(smiles)
+    query = get_2d_mol(mol, atol=atol)
+    reference = get_2d_mol(Chem.Mol(mol), atol=atol)
 
     flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
 
@@ -181,7 +178,7 @@ def test_get_alignment_flips_and_transform_self_alignment_is_a_no_op(
     np.testing.assert_allclose(transform, np.eye(4), atol=atol)
 
 
-# acetylic_acid.mol, 30 degrees fails somehow, so we jump with 14 degrees
+# acetylic_acid.mol: use 14-degree increments to avoid failure at 30 degrees.
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 14)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
@@ -223,7 +220,7 @@ def assert_all_alignments(
 
             found_flips, global_flip, found_angle = op_func(q, q_orig, atol)
 
-            # reapply the found data
+            # reapply detected transformations.
             for bond_ix, anchor_atom_ix in found_flips:
                 q = flip_bond(q, bond_ix, anchor_atom_ix, atol=atol)
             q = apply_transform(q, found_angle, flip_horizontal=global_flip, atol=atol)
@@ -231,7 +228,7 @@ def assert_all_alignments(
             assert is_same_conformer(q, q_orig, atol=atol)
 
 
-# acetylic_acid.mol, 30 degrees fails somehow, so we jump with 14 degrees
+# acetylic_acid.mol: use 14-degree increments to avoid failure at 30 degrees.
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 32)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
@@ -262,7 +259,7 @@ def test_get_alignment_flips_and_transform(
     assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=atol)
 
 
-# acetylic_acid.mol, 30 degrees fails somehow, so we jump with 14 degrees
+# acetylic_acid.mol: use 14-degree increments to avoid failure at 30 degrees.
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 32)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
@@ -294,12 +291,12 @@ def test_get_alignment_ops_from_molblock(
 
 
 def test_get_best_fit_angle_matching_ratio_needs_no_rotation() -> None:
-    mol = _rect_mol([(-2.0, -1.0), (2.0, -1.0), (-2.0, 1.0), (2.0, 1.0)])  # 4 wide, 2 tall
+    mol = _rect_mol([(-2.0, -1.0), (2.0, -1.0), (-2.0, 1.0), (2.0, 1.0)])  # 4x2 rectangle.
     _assert_angle_close(get_best_fit_angle(mol, (2.0, 1.0)), 0.0)
 
 
 def test_get_best_fit_angle_rotates_tall_shape_to_match_ratio() -> None:
-    # the rectangle above, rotated 90 degrees in `apply_transform`'s convention: 2 wide, 4 tall
+    # 2x4 rectangle rotated 90 degrees.
     mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])
     _assert_angle_close(get_best_fit_angle(mol, (2.0, 1.0)), 90.0)
 
@@ -313,8 +310,7 @@ def test_get_best_fit_angle_is_invariant_to_target_scale() -> None:
 
 @pytest.mark.parametrize("angle_step_deg", [15.0, 30.0, 45.0, 90.0])
 def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float, atol: float) -> None:
-    # a real (non-rectangular) molecule, so the unconstrained optimum is generally
-    # *not* on the grid -- this checks the search is actually restricted to it.
+    # use a non-rectangular molecule to verify search is restricted to the grid.
     q_orig = from_fixture_molblock("mol.mol")
     angle = get_best_fit_angle(q_orig, (2.0, 1.0), angle_step_deg=angle_step_deg)
     assert 0.0 <= angle < 180.0
@@ -324,7 +320,7 @@ def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float, atol
 
 @pytest.mark.parametrize("ratio", ["2:1", "2.5:1", " 2 : 1 "])
 def test_get_alignment_ops_from_molblock_with_bounding_box_ratio(ratio: str, atol: float) -> None:
-    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])  # 2 wide, 4 tall
+    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])  # 2x4 rectangle.
     molblock = Chem.MolToMolBlock(mol, forceV3000=True)
 
     flips, global_flip, angle = get_alignment_ops_from_molblock(molblock, ratio, atol=atol)

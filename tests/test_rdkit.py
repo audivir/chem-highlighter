@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.backend.rdkit."""
+"""Tests for the RDKit backend."""
 
 from __future__ import annotations
 

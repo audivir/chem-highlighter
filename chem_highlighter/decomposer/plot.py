@@ -1,4 +1,4 @@
-"""Module for decomposing molecules into their core and residues."""
+"""Decompose molecules into cores and residues."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 def _change_map_atoms(mol: Chem.Mol, from_: int, to: int) -> Chem.Mol:
-    """Return a copy of *mol* with all atom-map numbers equal to *from_* changed to *to*."""
+    """Replace atom-map numbers from from_ to to in a copy of the molecule."""
     from rdkit import Chem
 
     mol = Chem.Mol(mol)
@@ -36,7 +36,7 @@ def _change_map_atoms(mol: Chem.Mol, from_: int, to: int) -> Chem.Mol:
 def _switch_equiv(
     a_smi: tuple[Chem.Mol, int], b_smi: tuple[Chem.Mol, int]
 ) -> tuple[Chem.Mol, Chem.Mol]:
-    """Swap two R-group substituents while exchanging their attachment-point map numbers."""
+    """Swap two R-group substituents and exchange their attachment-point map numbers."""
     (a_old, a), (b_old, b) = a_smi, b_smi
     a_new = _change_map_atoms(b_old, b, a)
     b_new = _change_map_atoms(a_old, a, b)
@@ -46,7 +46,7 @@ def _switch_equiv(
 def _fix_rdata_equivs(
     rdata_: Mapping[str, Sequence[Chem.Mol]], equivalents: Sequence[tuple[int, int]]
 ) -> dict[str, list[Chem.Mol]]:
-    """Reorder equivalent R-group columns so the most-common substituent is at each position."""
+    """Reorder equivalent R-group columns to place the most common substituent at each position."""
     rdata = {key: list(values) for key, values in rdata_.items()}
 
     for a, b in equivalents:
@@ -72,13 +72,13 @@ def _fix_core_equivs(
     equivalents: Sequence[tuple[int, int]],
     symbol: str = "I",
 ) -> dict[str, tuple[Chem.Mol, float]]:
-    """Sync most-tracker assignments with those found by re-decomposing the joined core."""
+    """Synchronize most-tracker assignments with results from re-decomposing the joined core."""
     for a, b in equivalents:
         a_val = decomposed.groups[f"R{a}"]
         a_mol, a_ratio = most_tracker[f"R{a}"]
 
         if mol_to_smiles(a_val) != mol_to_smiles(a_mol).replace("[H]", symbol):
-            # swap most with b
+            # swap most common substituent with b.
             b_mol, b_ratio = most_tracker[f"R{b}"]
             a_new, b_new = _switch_equiv((a_mol, a), (b_mol, b))
             most_tracker[f"R{a}"] = (a_new, b_ratio)
@@ -88,7 +88,7 @@ def _fix_core_equivs(
 
 
 def replace_atom(svg: str, decomposed: DecomposedMol, symbol: str = "I") -> str:
-    """Hide *symbol* atoms in *svg* and replace their bonds with dashed lines."""
+    """Hide atoms of the specified symbol in the SVG and replace their bonds with dashed lines."""
     from rdkit import Chem
     from rdkit_svg.utils import save_parse
 
@@ -113,7 +113,7 @@ def replace_atom(svg: str, decomposed: DecomposedMol, symbol: str = "I") -> str:
 def fix_decomposed(
     decomposed: DecomposedList, equivalents: Sequence[tuple[int, int]] | None = None
 ) -> tuple[DecomposedList, dict[str, list[Chem.Mol]]]:
-    """Reorder *decomposed* R-groups by equivalence and return updated per-position lists."""
+    """Reorder R-groups in the decomposed list by equivalence and return updated per-position lists."""
     rdata = decomposed.build_rdata()
 
     if equivalents is None:
@@ -139,10 +139,10 @@ def plot_decomposed(  # noqa: PLR0913,PLR0917
     title: str | None = None,
     backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
 ) -> tuple[DecomposedMol, HighlightBackendMoleculeT_co, str, Axes]:
-    """Render the most-common R-group for each position with a frequency-scaled colorbar.
+    """Render the most common R-group for each position with a frequency-scaled colorbar.
 
     Returns:
-        A tuple of (final DecomposedMol, highlighted document, SVG string, molecule axes).
+        Tuple containing the final DecomposedMol, highlighted document, SVG string, and molecule axes.
     """
     import matplotlib as mpl
     from matplotlib.figure import Figure
@@ -177,7 +177,7 @@ def plot_decomposed(  # noqa: PLR0913,PLR0917
 
     color_codes = [cmap(most_tracker[key][1]) for key in final.labels]
 
-    # make a color bar for 0 - 100 %
+    # create a color bar for 0-100%.
     if fig is None:
         fig = Figure(figsize=(10, 10))
 
@@ -212,7 +212,7 @@ def plot_decomposed(  # noqa: PLR0913,PLR0917
 
 
 def colorbar(fig: Figure | SubFigure, nticks: int = 2, cmap: str = "plasma") -> Axes:
-    """Render a horizontal gradient colorbar spanning 0→1 inside *fig*."""
+    """Render a horizontal gradient colorbar from 0 to 1 inside fig."""
     import numpy as np
     from matplotlib.patches import Rectangle
 
@@ -220,10 +220,10 @@ def colorbar(fig: Figure | SubFigure, nticks: int = 2, cmap: str = "plasma") -> 
 
     gradient = np.linspace(0, 1, 256).reshape(1, -1)
 
-    # ...extent=[left, right, bottom, top]
+    # define boundaries as [left, right, bottom, top].
     _ = ax.imshow(gradient, aspect="auto", cmap=cmap, extent=(0, 1, 0, 0.05))
 
-    # Formatting the "Colorbar"
+    # format colorbar axes.
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 0.05)
 

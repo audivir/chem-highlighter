@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.decomposer.core."""
+"""Tests for the decomposer core."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def assert_group_equals(
 
 
 def test_decompose_returns_qcore_and_both_molecules() -> None:
-    # OCCCO is the core; COCCCOS has C on one end and S on the other.
+
     qcore, result = decompose("OCCCO", ["COCCCOS", "NOCCCOP"])
     assert_mols_equal(qcore, "OCCCO")
     assert set(result) == {0, 1}
@@ -48,13 +48,13 @@ def test_decompose_returns_qcore_and_both_molecules() -> None:
     ],
 )
 def test_decompose_rgroups_correct(mol_idx: int, expected_groups: dict[str, str]) -> None:
-    # Each molecule must have the correct core and R-group substituents.
+
     _, result = decompose("OCCCO", ["COCCCOS", "NOCCCOP"])
     assert_group_equals(result[mol_idx][1], expected_groups)
 
 
 def test_decompose_non_matching_molecules_are_excluded() -> None:
-    # "CCC" does not contain the OCCCO substructure; it must be absent.
+    # verify that molecules without the target substructure are excluded.
     _, result = decompose("OCCCO", ["COCCCOS", "CCC", "NOCCCOP"])
     assert set(result) == {0, 2}
     assert_group_equals(result[0][1], {"Core": "C(CO[*:1])CO[*:2]", "R1": "C[*:1]", "R2": "S[*:2]"})
@@ -62,11 +62,11 @@ def test_decompose_non_matching_molecules_are_excluded() -> None:
 
 
 def test_decompose_single_rgroup_molecule() -> None:
-    # OCCO is a 2-oxygen core; substituents vary on both ends.
+    # verify that substituents vary on both ends of the OCCO core.
     _, result = decompose("OCCO", ["COCCOF", "NOCCOP"])
     r1_smis = {mol_to_smiles(result[ix][1]["R1"]) for ix in result}
     r2_smis = {mol_to_smiles(result[ix][1]["R2"]) for ix in result}
-    # Both positions should vary across the two molecules.
+    # verify that both positions vary across the molecules.
     assert len(r1_smis) == 2
     assert len(r2_smis) == 2
 
@@ -74,10 +74,10 @@ def test_decompose_single_rgroup_molecule() -> None:
 @pytest.mark.parametrize(
     ("core_smiles", "probe_smiles", "should_match"),
     [
-        ("OCCCO", "COCCCOS", True),  # probe contains the core
-        ("OCCCO", "CCC", False),  # probe is too short
-        ("c1ccccc1", "Cc1ccccc1", True),  # toluene contains benzene
-        ("c1ccccc1", "CCCC", False),  # butane has no ring
+        ("OCCCO", "COCCCOS", True),  # verify that the probe contains the core.
+        ("OCCCO", "CCC", False),  # verify that the probe is too short to match.
+        ("c1ccccc1", "Cc1ccccc1", True),  # verify that toluene contains benzene.
+        ("c1ccccc1", "CCCC", False),  # verify that butane has no ring.
     ],
 )
 def test_create_qcore_substructure_matching(
@@ -153,8 +153,7 @@ def test_core_decompose_all_nonmatching_raises() -> None:
 
 
 def test_core_decompose_partial_match_preserves_original_indices() -> None:
-    # Index 1 ("CCC") doesn't match; the two matching molecules keep their
-    # original positions (0 and 2) and their R-groups remain correct.
+    # verify that non-matching molecules are excluded while matching molecules preserve original indices.
     decomposed, non_matched = Core("OCCCO").decompose(["COCCCOS", "CCC", "NOCCCOP"])
     assert non_matched == [1]
     assert len(decomposed) == 2
@@ -174,7 +173,7 @@ def test_core_decompose_legends_are_preserved_for_matched_molecules() -> None:
 
 
 def test_core_decompose_skip_cores_with_unknown_core_has_no_effect() -> None:
-    # A skip_cores entry that never appears in results must not filter anything.
+    # verify that skip_cores entries not present in results do not filter any molecules.
     decomposed, _ = Core("OCCCO").decompose(
         ["COCCCOS", "NOCCCOP"], skip_cores=["THIS_WILL_NEVER_MATCH"]
     )
@@ -184,8 +183,7 @@ def test_core_decompose_skip_cores_with_unknown_core_has_no_effect() -> None:
 
 
 def test_core_decompose_three_molecules_rgroup_substituents() -> None:
-    # Check the SET of substituent atoms to avoid depending on which position
-    # RDKit assigns R1 vs R2 (that can change when more molecules are added).
+    # verify substituent atom sets to avoid dependence on RDKit R-group assignment order.
     decomposed, _ = Core("OCCCO").decompose(["COCCCOS", "NOCCCOP", "COCCCON"])
     rdata = decomposed.build_rdata()
     assert set(rdata) == {"R1", "R2"}
@@ -195,9 +193,9 @@ def test_core_decompose_three_molecules_rgroup_substituents() -> None:
         return {a.GetSymbol() for a in get_atoms(mol) if a.GetAtomicNum() not in (0, 1)}
 
     for mol_idx, expected_pair in [
-        (0, {"C", "S"}),  # COCCCOS
-        (1, {"N", "P"}),  # NOCCCOP
-        (2, {"C", "N"}),  # COCCCON
+        (0, {"C", "S"}),
+        (1, {"N", "P"}),
+        (2, {"C", "N"}),
     ]:
         actual = substituent_atoms(rdata["R1"][mol_idx]) | substituent_atoms(rdata["R2"][mol_idx])
         assert actual == expected_pair, f"molecule {mol_idx}: {actual} != {expected_pair}"
@@ -206,9 +204,13 @@ def test_core_decompose_three_molecules_rgroup_substituents() -> None:
 @pytest.mark.parametrize(
     ("n", "legends", "expected"),
     [
-        (3, ["A", "B", "C"], ["A", "B", "C"]),  # all provided → kept as-is
-        (3, ["A", "", "C"], ["A", None, "C"]),  # empty string → None
-        (4, None, [None, None, None, None]),  # no legends → all None
+        (3, ["A", "B", "C"], ["A", "B", "C"]),  # verify that provided legends are preserved.
+        (3, ["A", "", "C"], ["A", None, "C"]),  # verify that empty strings are converted to None.
+        (
+            4,
+            None,
+            [None, None, None, None],
+        ),  # verify that missing legends result in a list of None values.
     ],
 )
 def test_check_legends(n: int, legends: list[str] | None, expected: list[str | None]) -> None:

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 def remove_empty_branches(smiles: str) -> str:
-    """Remove empty branches from a SMILES string."""
+    """Remove empty branches from SMILES string."""
     return smiles.replace("()", "")
 
 
@@ -38,7 +38,17 @@ def validate_data(  # pragma: no cover
     legends_col: str | None = None,
     ignore_cols: Sequence[str] | None = None,
 ) -> None:
-    """Validate the input data."""
+    """Validate input DataFrame column naming and SMILES strings.
+
+    Args:
+        df: DataFrame containing SMILES data.
+        base: Base SMILES string to validate.
+        legends_col: Column name to exclude from validation.
+        ignore_cols: Sequence of column names to exclude from validation.
+
+    Raises:
+        ValueError: If columns are not named in the 'R{n}' format.
+    """
     ignore_cols = [] if ignore_cols is None else list(ignore_cols)
 
     if legends_col is not None:
@@ -51,7 +61,7 @@ def validate_data(  # pragma: no cover
         if not (name.startswith("R") and name[1:].isdigit()):
             raise ValueError(f"Columns should be named R1, R2, R3, etc. Got {name}")
 
-    ## TEST VALID SMILES
+    # validate SMILES strings.
     mol_from_smiles(base)
     for elem in df[smi_cols].to_numpy().flat:
         mol_from_smiles(elem)
@@ -60,7 +70,16 @@ def validate_data(  # pragma: no cover
 def complete_smiles(  # pragma: no cover
     df: pl.DataFrame, base: str, only_cores: bool = False
 ) -> list[str] | set[str]:
-    """Complete the SMILES strings."""
+    """Generate complete SMILES strings by replacing R-group placeholders in base structure.
+
+    Args:
+        df: DataFrame containing R-group substitutions.
+        base: Base SMILES string with map numbers.
+        only_cores: Whether to exclude R-groups with map numbers below 10 and return unique cores.
+
+    Returns:
+        List or set of completed SMILES strings.
+    """
     base = mol_to_smiles(mol_from_smiles(base))
 
     rgroups = [x for x in df.columns if x.startswith("R")]
@@ -87,7 +106,7 @@ def complete_smiles(  # pragma: no cover
 
 
 def create_empty(core: Mol) -> Chem.Mol:
-    """Create an empty core."""
+    """Generate empty core by replacing R-group placeholders with carbons and removing empty branches."""
     core_smi = mol_to_smiles(core)
     empty = re.sub(r"\[\*\:\d+\]", "C", core_smi)
     empty = remove_empty_branches(empty)
@@ -100,7 +119,7 @@ def create_empty(core: Mol) -> Chem.Mol:
 def set_neighbor_labels_for_atom(
     lbl: str, mol: Chem.Mol, at: Chem.Atom, source_idx_prop: str = "SourceAtomIdx"
 ) -> None:
-    """Set the neighbor labels for an atom."""
+    """Assign isotope labels to neighbors of dummy atom based on its map number."""
     if not (
         not at.GetAtomicNum()
         and at.GetAtomMapNum()
@@ -110,8 +129,7 @@ def set_neighbor_labels_for_atom(
         return
 
     at_map_num = at.GetAtomMapNum()
-    # attachment point. the atoms connected to this
-    # should be from the molecule
+    # identify atoms connected to the attachment point within the molecule.
     for nbr in at.GetNeighbors():
         if not nbr.HasProp(source_idx_prop):  # pragma: no cover
             continue
@@ -126,9 +144,8 @@ def set_neighbor_labels_for_atom(
 def set_orig_isotope(
     old_idx: int, at: Chem.Atom, source_idx_prop: str = "SourceAtomIdx"
 ) -> tuple[int, int] | None:
-    """Set the original isotope value for an atom."""
-    # reset the original isotope values and account for the fact that
-    # removing the Hs changed atom indices
+    """Restore original isotope value for an atom based on its source index property."""
+    # restore original isotope values and adjust for atom index shifts caused by hydrogen removal.
     if at.HasProp(source_idx_prop):
         if at.HasProp("_OrigIsotope"):  # pragma: no cover
             at.SetIsotope(at.GetIntProp("_OrigIsotope"))
@@ -148,7 +165,7 @@ def get_ring_fill(
     old_new_atom_map: dict[int, int],
     source_idx_prop: str = "SourceAtomIdx",
 ) -> list[int] | None:
-    """Get the ring fill."""
+    """Map ring atom indices to their corresponding source indices."""
     tring: list[int] = []
     all_found = True
     for aid in aring:
@@ -169,7 +186,7 @@ def get_bond_fill(
     old_new_atom_map: dict[int, int],
     source_idx_prop: str = "SourceAtomIdx",
 ) -> int | None:
-    """Get the bond fill."""
+    """Retrieve original bond index using source atom properties and the atom mapping."""
     batom = qbnd.GetBeginAtom()
     eatom = qbnd.GetEndAtom()
 
@@ -183,7 +200,7 @@ def get_bond_fill(
 
 
 def get_old_new_atom_map(tmol: Chem.Mol, source_idx_prop: str = "SourceAtomIdx") -> dict[int, int]:
-    """Get the old and new atom map."""
+    """Map original atom indices to their current indices using source atom properties."""
     old_new_atom_map: dict[int, int] = {}
     for ix, at in enumerate(get_atoms(tmol)):
         mapping = set_orig_isotope(ix, at, source_idx_prop)
@@ -201,7 +218,7 @@ def convert_decomposed_to_hml(
     source_idx_prop: str = "SourceAtomIdx",
     get_colors_func: Callable[[], list[RGBA]] | None = None,
 ) -> HML:
-    """Get the highlight options."""
+    """Convert decomposed molecule groups into highlight mapping for visualization."""
     from rdkit import Chem
 
     old_new_atom_map = get_old_new_atom_map(mol, source_idx_prop)
@@ -249,16 +266,14 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
     get_colors_func: Callable[[], list[RGBA]] | None = None,
     backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
 ) -> HighlightBackendMoleculeT_co:
-    """Highlight R-groups in a molecule."""
+    """Apply visual highlighting to R-group substituents within a molecule."""
     from rdkit import Chem
     from rdkit.Chem import rdqueries
 
-    # copy the molecule and core
     mol = Chem.Mol(mol)
     core = Chem.Mol(core)
 
-    # include the atom map numbers in the substructure search in order to
-    # try to ensure a good alignment of the molecule to symmetric cores
+    # include atom map numbers in the substructure search to improve alignment with symmetric cores.
     for at in get_atoms(core):
         if at_map_num := at.GetAtomMapNum():
             at.ExpandQuery(rdqueries.IsotopeEqualsQueryAtom(200 + at_map_num))
@@ -271,9 +286,7 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
 
     doc = RDKitMolecule.from_mol(mol)
 
-    # Identify and store which atoms, bonds, and rings we'll be highlighting
-    # use `mol` (not `doc.mol`) since the molblock round-trip performed by
-    # `from_mol` does not preserve the `source_idx_prop` atom property
+    # identify atoms, bonds, and rings for highlighting using `mol` to preserve `source_idx_prop`.
     hml = convert_decomposed_to_hml(
         mol,
         groups,
@@ -295,12 +308,12 @@ def draw_single(
     # opts: MolDrawOptions | None = None,  # noqa: ERA001
     backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
 ) -> HighlightBackendMoleculeT_co:
-    """Draw a single decomposed molecule by highlighting and aligning.
+    """Draw single decomposed molecule using highlighting and alignment.
 
     Args:
-        decomposed: The decomposed molecule.
-        get_colors_func: A function to get colors. Defaults to None.
-        backend: The highlighting document backend to use.
+        decomposed: Decomposed molecule data.
+        get_colors_func: Optional function to provide color mapping.
+        backend: Highlighting document backend.
 
     Returns:
         The highlighted document.
@@ -316,7 +329,7 @@ def draw_single(
     ref_doc = backend.from_mol(decomposed.qcore)
     doc.align_to_reference(ref_doc.to_molblock())
     doc.kekulize(True)
-    # decomposed.legend
+
     return doc
 
 
@@ -328,7 +341,7 @@ def draw_multiple(  # pragma: no cover
     get_colors_func: Callable[[], list[RGBA]] | None = None,
     backend: type[HighlightBackendMolecule] = RDKitMolecule,
 ) -> None:
-    """Draw multiple groups of molecules in a grid."""
+    """Draw multiple molecule groups in a grid layout."""
     import imgkit
     import numpy as np
     import pandas as pd
@@ -353,7 +366,7 @@ def draw_multiple(  # pragma: no cover
     )
 
     data = buffer.getvalue()
-    # numpy matrix to html table
+    # convert numpy matrix to html table.
     filename = Path(filename)
     if filename.suffix == ".html":
         Path(filename).write_text(data, encoding="utf-8")

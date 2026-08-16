@@ -1,4 +1,4 @@
-"""Utilities for rendering Polars DataFrames as AG Grid HTML tables."""
+"""Provide utilities to render Polars DataFrames as AG Grid HTML tables."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger()
 
-# Estimates for pixel widths
+# pixel width estimates.
 CHAR_WIDTH_PX = 8
 CELL_PADDING_PX = 32
 HEADER_ICON_PADDING_PX = 20
@@ -28,7 +28,7 @@ MAX_COLUMN_WIDTH_PX = 400
 
 
 def _content_width(col: str, row_data: list[dict[str, Any]]) -> int:
-    """Estimate a column's pixel width from its header and longest rendered value."""
+    """Calculate column pixel width based on header and longest value."""
     content_len = max(
         (len(str(row[col])) for row in row_data if row.get(col) is not None),
         default=0,
@@ -40,13 +40,13 @@ def _content_width(col: str, row_data: list[dict[str, Any]]) -> int:
 
 
 class FilterParams(TypedDict):
-    """AG Grid column filter params."""
+    """Container for AG Grid column filter parameters."""
 
     buttons: list[str]
 
 
 class ColumnDef(TypedDict):
-    """AG Grid column definition."""
+    """Container for AG Grid column definitions."""
 
     field: str
     headerName: str
@@ -59,7 +59,7 @@ class ColumnDef(TypedDict):
 
 
 class GridOptions(TypedDict):
-    """AG Grid grid definition."""
+    """Container for AG Grid grid definitions."""
 
     rowData: list[dict[str, Any]]
     columnDefs: list[ColumnDef]
@@ -69,7 +69,7 @@ class GridOptions(TypedDict):
 
 
 class TextFilterModel(TypedDict):
-    """AG Grid simple text column filter model."""
+    """Container for AG Grid simple text column filter models."""
 
     filterType: NotRequired[Literal["text"]]
     type: NotRequired[
@@ -90,7 +90,7 @@ class TextFilterModel(TypedDict):
 
 
 class NumberFilterModel(TypedDict):
-    """AG Grid simple number column filter model."""
+    """Container for AG Grid simple number column filter models."""
 
     filterType: NotRequired[Literal["number"]]
     type: NotRequired[
@@ -112,7 +112,7 @@ class NumberFilterModel(TypedDict):
 
 
 class DateFilterModel(TypedDict):
-    """AG Grid simple date column filter model."""
+    """Container for AG Grid simple date column filter models."""
 
     filterType: NotRequired[Literal["date"]]
     type: NotRequired[
@@ -132,7 +132,7 @@ class DateFilterModel(TypedDict):
 
 
 class SetFilterModel(TypedDict):
-    """AG Grid set column filter model."""
+    """Container for AG Grid set column filter models."""
 
     filterType: NotRequired[Literal["set"]]
     values: list[str] | None
@@ -142,7 +142,7 @@ SimpleFilterModel = TextFilterModel | NumberFilterModel | DateFilterModel
 
 
 class CombinedFilterModel(TypedDict):
-    """AG Grid combined (AND/OR) column filter model."""
+    """Container for AG Grid combined column filter models."""
 
     filterType: NotRequired[str]
     operator: Literal["AND", "OR"]
@@ -158,14 +158,13 @@ def polars_to_aggrid(
     pinned_rows: int = 0,
     preset_filter: Mapping[str, FilterModel] | None = None,
 ) -> str:
-    """Convert a Polars DataFrame to an AG Grid webpage.
+    """Convert Polars DataFrame to AG Grid webpage.
 
     Args:
         df: Input DataFrame.
         svg_cols: Columns to render as embedded SVG images.
-        pinned_rows: Number of pinned rows. Not affected by filters, always visible.
-        preset_filter: An AG Grid filter model applied to the grid on load.
-            Conditions on different columns are combined with AND.
+        pinned_rows: Number of rows to pin at the top.
+        preset_filter: AG Grid filter model to apply on load.
     """
     has_svg = False
     placeholder = str(uuid.uuid4())
@@ -182,7 +181,7 @@ def polars_to_aggrid(
             "sortable": True,
             "filter": True,
             "resizable": True,
-            "filterParams": {"buttons": ["reset"]},  # reset button on each row
+            "filterParams": {"buttons": ["reset"]},  # reset button for each row.
         }
         if svg_cols and col in svg_cols:
             col_def["cellRenderer"] = placeholder
@@ -314,31 +313,19 @@ def create_visualization_table(  # noqa: PLR0913,PLR0917
     pinned_rows: int = 0,
     preset_filter: Mapping[str, FilterModel] | None = None,
 ) -> str:
-    """Render a Polars DataFrame as an AG Grid HTML table with molecule SVGs.
-
-    Example:
-        >>> import polars as pl
-        >>> from rdkit import Chem
-        >>> df = pl.DataFrame({"SMILES": ["CCCC", "CCO"]})
-        >>> df = df.with_columns(
-        ...     pl.col("SMILES")
-        ...     .map_elements(Chem.MolFromSmiles, return_dtype=pl.Object)
-        ...     .alias("Molecule")
-        ... )
-        >>> html = create_visualization_table(df, reference=0)
+    """Render Polars DataFrame as AG Grid HTML table with molecule SVGs.
 
     Args:
         df: Input DataFrame.
-        vis_mol_col: Name of the column containing RDKit molecule objects.
-        reference: Reference molecule to align to, either as index or RDKit molecule.
-        clean_reference: Clean up reference before aligning.
+        vis_mol_col: Column name containing RDKit molecule objects.
+        reference: Reference molecule for alignment, provided as an index or RDKit molecule.
+        clean_reference: Whether to clean the reference molecule before alignment.
         backend: Backend used to generate SVG depictions.
-        pinned_rows: Number of pinned rows. Not affected by filters, always visible.
-        preset_filter: An AG Grid filter model applied to the grid on load.
-            Conditions on different columns are combined with AND.
+        pinned_rows: Number of rows to pin at the top.
+        preset_filter: AG Grid filter model to apply on load.
 
     Returns:
-        A standalone HTML document containing the interactive AG Grid table.
+        Standalone HTML document containing the interactive AG Grid table.
     """
     import polars as pl
     from rdkit import Chem

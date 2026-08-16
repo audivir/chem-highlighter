@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from io import BytesIO, StringIO
@@ -14,6 +15,8 @@ from typing_extensions import Self, override
 from chem_highlighter.align import get_2d_mol, get_alignment_flips_and_transform, get_best_fit_angle
 from chem_highlighter.hml import (
     HML,
+    AsyncDocument,
+    AsyncHighlightBackendMolecule,
     Document,
     HighlightBackendMolecule,
     InputFormat,
@@ -37,6 +40,20 @@ Drawer: TypeAlias = "Draw.MolDraw2DCairo | Draw.MolDraw2DSVG"
 SENTINEL_ISOTOPE = 999
 
 
+def _mol_from_molblock(molblock: str) -> Chem.Mol:
+    """Parse mol block into sanitized RDKit molecule.
+
+    Raises:
+        ValueError: If the molblock is invalid.
+    """
+    from rdkit import Chem
+
+    mol: Chem.Mol | None = Chem.MolFromMolBlock(molblock, removeHs=False)
+    if not mol:
+        raise ValueError("Invalid molblock")
+    return mol
+
+
 def highlight_without_rings(  # noqa: PLR0913,PLR0917
     drawer: Drawer,
     hml: HML,
@@ -45,7 +62,7 @@ def highlight_without_rings(  # noqa: PLR0913,PLR0917
     atomrad: float = 0.4,
     widthmult: float = 2,
 ) -> None:
-    """Draw the molecule with the provided highlight options. Does not fill rings."""
+    """Draw molecule with highlights and no ring fills."""
     atoms = {
         atom_ix: [hml.get_rgba(group_ix)] for atom_ix, group_ix in hml.highlighted_atoms.items()
     }
@@ -62,12 +79,7 @@ LEGEND_PATH_RE = re.compile(r'(<path class="legend"[^>]*?fill="([^"]+)")\s*/>')
 
 
 def _bold_legend(svg: str) -> str:
-    """Fake a bold legend by outlining its (already vector-path) glyphs with a matching stroke.
-
-    RDKit draws the legend as filled vector paths (`class='legend'`), not real `<text>`, so
-    there's no font weight to select -- a small stroke in the same color visually thickens the
-    glyph outlines instead.
-    """
+    """Simulate bold legend text by adding matching strokes to vector-path glyphs."""
     return LEGEND_PATH_RE.sub(
         lambda m: f'{m.group(1)} stroke="{m.group(2)}" stroke-width="1.2" />', svg
     )
@@ -79,7 +91,7 @@ def draw_polygon(
     atom_ixs: Sequence[int],
     color: str,
 ) -> None:
-    """Draw a polygon inbetween the specified atoms."""
+    """Draw polygon connecting specified atoms."""
     from rdkit.Geometry import Point2D
 
     points: list[Point2D] = []
@@ -96,11 +108,11 @@ def highlight_rings(
     hml: HML,
     mol: Chem.Mol,
 ) -> None:
-    """Fill the rings with polygons."""
-    # a hack to set the molecule scale
+    """Fill highlighted rings with polygons."""
+    # set molecule scale.
     highlight_without_rings(drawer, hml, mol)
     drawer.ClearDrawing()
-    # TODO(tihoph): assert the drawing is actually clean, sometimes with the drawing twice
+    # verify drawing is clear to prevent duplicate rendering.
     conf = mol.GetConformer()
     for ring_ix, group_ix in hml.highlighted_rings.items():
         color = hml.palette[group_ix]
@@ -116,7 +128,7 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
     fill_rings: bool = True,
     opts: Draw.MolDrawOptions | None = None,
 ) -> bytes:
-    """Draw the molecule with the provided highlighting options in the given output format."""
+    """Draw molecule using specified highlighting options and output format."""
     from rdkit.Chem import Draw
     from rdkit_svg.draw import get_rdkit_svg
     from rdkit_svg.utils import assure_elem, hide_objects, read_tree, remove_whitespace, to_string
@@ -139,14 +151,9 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
     if not opts:  # pragma: no branch
         opts = drawer.drawOptions()
         if auto_fit:
-            # TODO(tihoph): but i want to still have the ACS1996 look,
-            # maybe creating svg and then rendering to png? keeping aspect ratio intact
+            # maintain ACS1996 style by rendering SVG to PNG to preserve aspect ratio.
 
-            # a fixed canvas size auto-fits/centers the molecule to it (unlike ACS1996 mode,
-            # which draws at a fixed absolute scale regardless of canvas size), matching the
-            # bounding-box behavior of another backend's resvg-based PNG renderer. Only used
-            # once a size is actually configured -- unconfigured, PNG keeps its previous -1,-1
-            # ACS1996 sizing.
+            # auto-fit and center molecule when canvas size is configured to match resvg behavior.
             opts.prepareMolsBeforeDrawing = True  # type: ignore[assignment]
         else:
             mean_bond_length = Draw.MeanBondLength(mol) or 1.0
@@ -158,8 +165,7 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
         opts.setBackgroundColour((0.0, 0.0, 0.0, 0.0))
 
     if fill_rings:  # pragma: no branch
-        # if we are filling rings, go ahead and do that first so that we draw
-        # the molecule on top of the filled rings
+        # fill rings first to ensure molecule is drawn on top.
         highlight_rings(drawer, hml, mol)
 
     highlight_without_rings(drawer, hml, mol, legend)
@@ -171,10 +177,7 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
             raise ValueError("No root element found")
         hide_objects(tree, ["rect"])
         if not legend:
-            # rdkit_svg's bbox math (remove_whitespace/find_bounds) undercounts the legend's
-            # bezier-curve glyph paths, cropping the canvas back down to just the molecule and
-            # clipping the legend out of view -- so skip cropping whenever a legend is present
-            # and keep RDKit's own (correctly-sized) canvas instead.
+            # skip cropping when legend is present to prevent clipping.
             remove_whitespace(tree)
         svg = to_string(tree)
         if legend:
@@ -184,11 +187,7 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
 
 
 def export_rdkit_molecule(mol_backend: RDKitMolecule, fmt: OutputFormat, use_v2000: bool) -> bytes:  # noqa: PLR0911
-    """Serialize one RDKit-backed molecule to `fmt`.
-
-    Shared by `RDKitMolecule.export` (standalone use) and `RDKitDocument` (whole-document/
-    single-molecule export), so the format-conversion logic lives in exactly one place.
-    """
+    """Serialize RDKit molecule to specified format."""
     from rdkit import Chem
 
     kekulized, _, _ = mol_backend.get_edit_state()
@@ -215,20 +214,16 @@ def export_rdkit_molecule(mol_backend: RDKitMolecule, fmt: OutputFormat, use_v20
         return draw_mol(hml, mol_backend.mol, "svg", mol_backend._label)  # noqa: SLF001
     if fmt == "PNG":
         return draw_mol(hml, mol_backend.mol, "png", mol_backend._label)  # noqa: SLF001
-    # RXN, CDX, CDXML, EPS
+    # rxn, cdx, cdxml, eps
     name = type(mol_backend).__name__
     raise OutputFormatNotSupported(f"{name} does not support exporting to {fmt}")
 
 
 class RDKitMolecule(HighlightBackendMolecule):
-    """A structure to store a molecule for RDKit backend."""
+    """Wraps RDKit molecules for highlight backend compatibility."""
 
     def __init__(self, mol: Chem.Mol) -> None:
-        """Initialize the RDKitMolecule from a RDKit molecule.
-
-        Args:
-            mol: The RDKit molecule to wrap.
-        """
+        """Initialize wrapper with RDKit molecule."""
         from rdkit import Chem
         from rdkit.Chem import rdDepictor
 
@@ -243,42 +238,42 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def get_edit_state(self) -> tuple[bool, bool, bool]:
-        """Get the edit state tuple."""
+
         return self._edit_state
 
     @override
     def set_edit_state(self, kekulized: bool, aligned: bool, hydrogens_hidden: bool) -> None:
-        """Set the edit state."""
+        """Update edit state."""
         self._edit_state = kekulized, aligned, hydrogens_hidden
 
     @override
     def get_hml_json(self) -> str | None:
-        """Get the JSON-encoded HML object."""
+        """Return JSON-encoded HML object."""
         return self._hml_json
 
     @override
     def set_hml_json(self, hml_json: str) -> None:
-        """Set the JSON-encoded HML object."""
+        """Update JSON-encoded HML object."""
         self._hml_json = hml_json
 
     @override
     def get_label(self) -> str | None:
-        """Get the label text, if set."""
+        """Return label text if set."""
         return self._label
 
     @override
     def set_label(self, label: str) -> None:
-        """Set the label text."""
+        """Update label text."""
         self._label = label
 
     @override
     def add_label_callback(self, text: str) -> None:
-        """Do nothing: the label is rendered directly from state during `export`."""
+        """No-op; label is rendered from state during export."""
 
     @override
     @classmethod
     def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
-        """Create a document from byte data."""
+        """Initialize document from byte data."""
         from rdkit import Chem
 
         mol: Chem.Mol | None = None
@@ -305,7 +300,7 @@ class RDKitMolecule(HighlightBackendMolecule):
             inchi_mol: Chem.Mol | None = Chem.MolFromInchi(data.decode(), removeHs=False)  # type: ignore[no-untyped-call]
             mol = inchi_mol
         else:
-            # RXN, CDX
+            # rxn, cdx.
             raise InputFormatNotSupported(f"{cls.__name__} does not support importing from {fmt}")
         if not mol or mol.GetNumAtoms() < 1:
             raise ValueError(f"Invalid {fmt} input")
@@ -313,23 +308,23 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:
-        """Export the molecule to the specified format as bytes."""
+        """Export molecule to specified format."""
         return export_rdkit_molecule(self, fmt, use_v2000)
 
     @override
     def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
-        """compute the alignment ops to fit a bounding box ratio via RDKit and apply them."""
+        """Align molecule to specified bounding box ratio."""
         atol = 1e-5
-        query = get_2d_mol(self.to_molblock(), atol=atol)
+        query = get_2d_mol(_mol_from_molblock(self.to_molblock()), atol=atol)
         angle = get_best_fit_angle(query, (width, height))
         self.mol = apply_transform(query, angle, flip_horizontal=False, atol=atol)
 
     @override
     def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
-        """compute the alignment ops against a reference molblock via RDKit and apply them."""
+        """Align molecule to reference molblock."""
         atol = 1e-5
-        query = get_2d_mol(self.to_molblock(), atol=atol)
-        reference = get_2d_mol(reference_molblock, atol=atol)
+        query = get_2d_mol(_mol_from_molblock(self.to_molblock()), atol=atol)
+        reference = get_2d_mol(_mol_from_molblock(reference_molblock), atol=atol)
         flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
         global_flip, angle = parse_transform(transform, atol=atol)
         for bond_ix, anchor_atom_ix in flips:
@@ -339,7 +334,7 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def cleanup_callback(self) -> None:
-        """Sanitize the molecule and recalculate its 2D coordinates."""
+        """Sanitize molecule and recalculate 2D coordinates."""
         from rdkit import Chem
         from rdkit.Chem.rdDepictor import Compute2DCoords
         from rdkit.Chem.rdmolops import SanitizeMol
@@ -349,7 +344,7 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def kekulize_callback(self, kekulize: bool) -> None:
-        """Kekulize or dekekulize the underlying molecule."""
+        """Kekulize or dekekulize molecule."""
         from rdkit import Chem
         from rdkit.Chem.rdmolops import SanitizeMol
 
@@ -360,7 +355,7 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def hide_hydrogens_callback(self) -> None:
-        """Hide featureless hydrogens on carbon atoms."""
+        """Hide featureless hydrogens."""
         from rdkit import Chem
 
         mol = Chem.Mol(self.mol)
@@ -382,13 +377,13 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def highlight_from_json_callback(self, hml_json: str, hide_hydrogens: bool = False) -> None:
-        """Do nothing as highlighting occurs during visualization only."""
+
         if hide_hydrogens:
             self.hide_hydrogens_callback()
 
 
 class RDKitDocument(Document[RDKitMolecule]):
-    """A collection of one or more molecules parsed from a single input, using the RDKit backend."""
+    """Container for molecules parsed via RDKit backend."""
 
     @classmethod
     @override
@@ -420,8 +415,7 @@ class RDKitDocument(Document[RDKitMolecule]):
                 else []
             )
         else:
-            # Mol, CDX, InChI: always a single molecule (or unsupported) -- reuse the
-            # single-molecule backend's own construction/restrictions unchanged.
+            # reuse single-molecule backend construction and restrictions for mol, cdx, and inchi.
             return [RDKitMolecule.from_bytes(data, fmt)]
 
         valid_mols = [mol for mol in mols if mol is not None and mol.GetNumAtoms() >= 1]
@@ -435,7 +429,7 @@ class RDKitDocument(Document[RDKitMolecule]):
         return draw_mol(None, combined, "svg" if fmt == "SVG" else "png")
 
     def _combine_for_export(self) -> Chem.Mol:
-        """Combine every molecule into one ephemeral `Chem.Mol`, translated by its offset."""
+        """Combine molecules into single translated Chem.Mol."""
         from rdkit import Chem
         from rdkit.Geometry import Point3D
 
@@ -450,7 +444,114 @@ class RDKitDocument(Document[RDKitMolecule]):
             combined = mol if combined is None else Chem.CombineMols(combined, mol)
         if combined is None:  # pragma: no cover -- `molecules` is never empty, see `__init__`
             raise ValueError("Document requires at least one molecule")
-        # `CombineMols` does not carry ring perception over onto the new `Chem.Mol`, so
-        # rendering it (which needs ring info to fill/highlight rings) would otherwise fail.
+        # perform ring perception to enable correct rendering of combined molecules.
         Chem.GetSSSR(combined)
         return combined
+
+
+class AsyncRDKitMolecule(AsyncHighlightBackendMolecule):
+    """RDKit backend executing calls in thread pool to avoid blocking event loop."""
+
+    def __init__(self, sync: RDKitMolecule) -> None:
+        """Wrap synchronous RDKitMolecule."""
+        self._sync = sync
+
+    @override
+    def get_hml_json(self) -> str | None:
+        return self._sync.get_hml_json()
+
+    @override
+    def set_hml_json(self, hml_json: str) -> None:
+        self._sync.set_hml_json(hml_json)
+
+    @override
+    def get_edit_state(self) -> tuple[bool, bool, bool]:
+        return self._sync.get_edit_state()
+
+    @override
+    def set_edit_state(self, kekulized: bool, aligned: bool, hydrogens_hidden: bool) -> None:
+        self._sync.set_edit_state(kekulized, aligned, hydrogens_hidden)
+
+    @override
+    def get_label(self) -> str | None:
+        return self._sync.get_label()
+
+    @override
+    def set_label(self, label: str) -> None:
+        self._sync.set_label(label)
+
+    @override
+    @classmethod
+    async def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
+        loop = asyncio.get_running_loop()
+        sync = await loop.run_in_executor(None, RDKitMolecule.from_bytes, data, fmt)
+        return cls(sync)
+
+    @override
+    async def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._sync.export, fmt, use_v2000)
+
+    @override
+    async def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, self._sync.align_to_reference_ratio_callback, width, height
+        )
+
+    @override
+    async def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, self._sync.align_to_reference_mol_callback, reference_molblock
+        )
+
+    @override
+    async def cleanup_callback(self) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._sync.cleanup_callback)
+
+    @override
+    async def kekulize_callback(self, kekulize: bool) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._sync.kekulize_callback, kekulize)
+
+    @override
+    async def hide_hydrogens_callback(self) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._sync.hide_hydrogens_callback)
+
+    @override
+    async def highlight_from_json_callback(
+        self, hml_json: str, hide_hydrogens: bool = False
+    ) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None, self._sync.highlight_from_json_callback, hml_json, hide_hydrogens
+        )
+
+    @override
+    async def add_label_callback(self, text: str) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._sync.add_label_callback, text)
+
+
+class AsyncRDKitDocument(AsyncDocument[AsyncRDKitMolecule]):
+    """RDKit backend for `AsyncDocument` delegating logic to `RDKitDocument` via thread pool."""
+
+    @classmethod
+    @override
+    async def _split_bytes(cls, data: bytes, fmt: InputFormat) -> list[AsyncRDKitMolecule]:
+        loop = asyncio.get_running_loop()
+        sync_mols = await loop.run_in_executor(None, RDKitDocument._split_bytes, data, fmt)  # noqa: SLF001
+        return [AsyncRDKitMolecule(m) for m in sync_mols]
+
+    @override
+    async def _combined_export(self, fmt: Literal["SVG", "PNG"]) -> bytes:
+        sync_doc = RDKitDocument(
+            [m._sync for m in self.molecules],  # noqa: SLF001
+            self.source_format,
+            self.offsets,
+        )
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, sync_doc._combined_export, fmt)  # noqa: SLF001

@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.decomposer.rejoin."""
+"""Tests for the rejoin module."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ from chem_highlighter.utils import mol_from_smiles
 @pytest.mark.parametrize(
     ("smiles", "atom_idx", "error_fragment"),
     [
-        ("C", 0, "has 0 neighbors"),  # methane: no heavy-atom neighbors
-        ("CCC", 1, "has 2 neighbors"),  # propane center C: two neighbors
+        ("C", 0, "has 0 neighbors"),  # methane: no heavy-atom neighbors.
+        ("CCC", 1, "has 2 neighbors"),  # propane center C: two neighbors.
     ],
 )
 def test_get_sole_neighbor_raises_when_not_exactly_one(
@@ -35,7 +35,7 @@ def test_get_sole_neighbor_raises_when_not_exactly_one(
 
 
 def test_get_sole_neighbor() -> None:
-    # In C-I, carbon has exactly one neighbor: iodine.
+    # carbon has exactly one neighbor: iodine.
     mol = mol_from_smiles("CI")
     neighbor = get_sole_neighbor(mol.GetAtomWithIdx(0))
     assert neighbor.GetSymbol() == "I"
@@ -44,8 +44,8 @@ def test_get_sole_neighbor() -> None:
 @pytest.mark.parametrize(
     ("smiles", "map_num", "num", "error_fragment"),
     [
-        ("C", 1, 1, "is not 1"),  # no [*:1] at all
-        ("C[*:1]", 1, 2, "is not 2"),  # only one [*:1]; asking for two
+        ("C", 1, 1, "is not 1"),  # no [*:1] present.
+        ("C[*:1]", 1, 2, "is not 2"),  # only one [*:1] present; requesting two.
     ],
 )
 def test_get_mapped_atoms_raises_when_count_mismatch(
@@ -59,7 +59,7 @@ def test_get_mapped_atoms_raises_when_count_mismatch(
 def test_get_mapped_atoms_single() -> None:
     mol = mol_from_smiles("C[*:1]")
     atom = get_mapped_atoms(mol, 1, num=1)
-    assert atom.GetAtomicNum() == 0  # dummy atom
+    assert atom.GetAtomicNum() == 0  # dummy atom.
 
 
 def test_get_mapped_atoms_double() -> None:
@@ -71,7 +71,7 @@ def test_get_mapped_atoms_double() -> None:
 
 
 def test_mask_hydrogens_raises_when_symbol_already_present() -> None:
-    # [H][*:1]I already contains iodine, so "I" cannot be used as the mask.
+    # [H][*:1]I contains iodine; "I" cannot be used as the mask.
     to_mask = mol_from_smiles("[H][*:1]I")
     with pytest.raises(ValueError, match="Mask symbol already in the molecule"):
         mask_hydrogens(to_mask, on=1, symbol="I")
@@ -80,8 +80,8 @@ def test_mask_hydrogens_raises_when_symbol_already_present() -> None:
 @pytest.mark.parametrize(
     ("smiles", "expected"),
     [
-        ("[H][*:1]", "[400I][*:1]"),  # replaces hydrogens
-        (  # Calling again on an already-masked mol must leave it unchanged.
+        ("[H][*:1]", "[400I][*:1]"),  # replace hydrogens.
+        (  # ensure idempotent masking.
             "[400I][*:1]",
             "[400I][*:1]",
         ),
@@ -94,7 +94,7 @@ def test_mask_hydrogens(smiles: str, expected: str) -> None:
 
 
 def test_clear_special_isotopes_removes_200_and_400_tags() -> None:
-    # Isotopes >= 200 are internal markers; clearing them removes the offset.
+    # remove internal markers with isotopes >= 200.
     mol = mol_from_smiles("IC([200I])([400I])")
     cleared = clear_special_isotopes(mol)
     assert_mols_equal(cleared, "IC(I)(I)")
@@ -103,8 +103,8 @@ def test_clear_special_isotopes_removes_200_and_400_tags() -> None:
 @pytest.mark.parametrize(
     ("smi_a", "smi_b", "on", "bond_order", "expected"),
     [
-        ("CC[*:1]", "CO[*:1]", 1, None, "CCOC"),  # single bond (default)
-        ("CC[*:1]", "OC[*:1]", 1, Chem.BondType.DOUBLE, "CC=CO"),  # explicit double bond
+        ("CC[*:1]", "CO[*:1]", 1, None, "CCOC"),  # default to single bond.
+        ("CC[*:1]", "OC[*:1]", 1, Chem.BondType.DOUBLE, "CC=CO"),  # use explicit double bond.
     ],
 )
 def test_join_mols(

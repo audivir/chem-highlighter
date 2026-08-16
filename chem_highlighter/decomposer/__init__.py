@@ -1,4 +1,4 @@
-"""Decompose RDKit molecules into core and R-Groups."""
+"""Decompose RDKit molecules into cores and R-groups."""
 
 from __future__ import annotations
 

@@ -1,22 +1,33 @@
-"""Highlight molecules using different backends."""
+"""Provide functionality to highlight molecules using various backends."""
 
 from __future__ import annotations
 
 from chem_highlighter import align, decomposer
-from chem_highlighter.backend.rdkit import RDKitDocument, RDKitMolecule
+from chem_highlighter.backend.rdkit import (
+    AsyncRDKitDocument,
+    AsyncRDKitMolecule,
+    RDKitDocument,
+    RDKitMolecule,
+)
 from chem_highlighter.diff import colorize_smiles_diff, get_smiles_diff
 from chem_highlighter.hml import (
     HML,
+    AsyncDocument,
+    AsyncHighlightBackendMolecule,
+    AsyncHighlightBackendMoleculeT_co,
     Document,
     HighlightBackendMolecule,
     HighlightBackendMoleculeT_co,
-    HMol,
 )
 
 __all__ = [
     "HML",
+    "AsyncDocument",
+    "AsyncHighlightBackendMolecule",
+    "AsyncHighlightBackendMoleculeT_co",
+    "AsyncRDKitDocument",
+    "AsyncRDKitMolecule",
     "Document",
-    "HMol",
     "HighlightBackendMolecule",
     "HighlightBackendMoleculeT_co",
     "RDKitDocument",

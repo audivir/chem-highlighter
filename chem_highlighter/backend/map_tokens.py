@@ -1,4 +1,4 @@
-"""Map SMILES tokens to its corresponding RDKit indices."""
+"""Map SMILES tokens to corresponding RDKit indices."""
 
 # ruff: noqa: S105
 from __future__ import annotations
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class SmilesTokenMap(NamedTuple):
-    """Store RDKit data for SMILES token."""
+    """Container for RDKit data associated with SMILES token."""
 
     token: str
     type: Literal["bond", "impl_bond", "atom", "ring", "par", "info"]
@@ -23,9 +23,9 @@ class SmilesTokenMap(NamedTuple):
 def map_smiles_tokens(  # noqa: PLR0915
     smiles: str, mol: Chem.Mol, tokenize_fn: Callable[[str], list[str]] | None = None
 ) -> list[SmilesTokenMap]:
-    """Map each token in a SMILES string to its structural role and RDKit index.
+    """Map SMILES tokens to structural roles and RDKit indices.
 
-    Assumes `smiles` was generated via `Chem.MolToSmiles(..., allBondsExplicit=True)`.
+    Requires `smiles` to be generated with `allBondsExplicit=True`.
     """
     all_props = mol.GetPropsAsDict(includePrivate=True, includeComputed=True)
     atom_order: list[int] = list(all_props["_smilesAtomOutputOrder"])
@@ -44,7 +44,7 @@ def map_smiles_tokens(  # noqa: PLR0915
     while ix < len(tokens):
         token = tokens[ix]
 
-        # bracketed atoms (e.g., [nH], [13C])
+        # handle bracketed atoms (e.g., [nH], [13C]).
         if token == "[":
             end_ix = tokens.index("]", ix)
             token_chars = "".join(tokens[ix : end_ix + 1])
@@ -52,8 +52,7 @@ def map_smiles_tokens(  # noqa: PLR0915
             orig_atom_ix = atom_order[atom_ix]
             current_atom_index = orig_atom_ix
 
-            # TODO(tihoph): if "[", "n", "H", "]" are single tokens these will fail downstream,
-            # if not handled properly as its stored as "[nH]", same for "C", "l" and "Cl"
+            # ensure multi-character tokens (e.g., [nH], Cl) are handled as single units to avoid downstream failure.
             token_maps.append(SmilesTokenMap(token_chars, "atom", "atom", orig_atom_ix))
 
             atom_ix += 1
@@ -68,28 +67,27 @@ def map_smiles_tokens(  # noqa: PLR0915
             atom_ix += 1
             ix += 1
 
-        # branches
+        # handle branches.
         elif token == "(":
-            # branch opens: belongs to the FIRST atom INSIDE the branch.
-            # atom_ix hasn't incremented yet, so atom_order[atom_ix] is the branch head.
+            # map branch opening to the first atom inside the branch.
             branch_head_atom = atom_order[atom_ix]
             token_maps.append(SmilesTokenMap(token, "par", "atom", branch_head_atom))
 
-            # track the parent so the main chain knows where to resume
+            # track parent atom to resume main chain traversal.
             branch_stack.append(current_atom_index)
             ix += 1
 
         elif token == ")":
-            # branch closes: belongs to the LAST atom inside the branch (the current one).
+            # map branch closing to the last atom inside the branch.
             token_maps.append(SmilesTokenMap(token, "par", "atom", current_atom_index))
 
-            # pop the stack to revert the main chain back to the parent atom
+            # pop stack to revert main chain to parent atom.
             current_atom_index = branch_stack.pop() if branch_stack else current_atom_index
             ix += 1
 
-        # ring closures "%", "1", "2"
+        # handle ring closure tokens.
         elif token == "%":
-            # TODO(tihoph): same problem as above, depending on tokenizer
+            # handle tokenizer-dependent tokenization.
             token_chars = "".join(tokens[ix : ix + 3])
             token_maps.append(SmilesTokenMap(token_chars, "ring", "atom", current_atom_index))
             ix += 3
@@ -98,7 +96,7 @@ def map_smiles_tokens(  # noqa: PLR0915
             token_maps.append(SmilesTokenMap(token, "ring", "atom", current_atom_index))
             ix += 1
 
-        # bonds
+        # handle bond tokens.
         elif token in {"-", "=", "#", "/", "\\", ":", "~"}:
             orig_bond_ix = bond_order[bond_ix] if bond_ix < len(bond_order) else -1
             bond_type: Literal["impl_bond", "bond"] = "impl_bond" if token in {"-", ":"} else "bond"
@@ -107,11 +105,11 @@ def map_smiles_tokens(  # noqa: PLR0915
             bond_ix += 1
             ix += 1
 
-        # unbracketed organic subset atoms (including Cl, Br)
+        # handle unbracketed organic subset atoms.
         else:
             token_chars = token
             n_tokens = 1
-            # TODO(tihoph): same problem as above, depending on tokenizer
+            # handle tokenizer-dependent tokenization.
             if ix + 1 < len(tokens) and "".join(tokens[ix : ix + 2]) in {"Cl", "Br"}:
                 token_chars = "".join(tokens[ix : ix + 2])
                 n_tokens = 2

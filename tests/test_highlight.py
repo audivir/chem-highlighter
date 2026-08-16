@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.decomposer.highlight."""
+"""Tests for the highlight module."""
 
 from __future__ import annotations
 
@@ -24,8 +24,11 @@ def test_remove_empty_branches(smiles: str, expected: str) -> None:
 @pytest.mark.parametrize(
     ("core_smiles", "expected_atoms"),
     [
-        ("C([*:1])([*:2])O", 4),  # two R-groups replaced by C → C(C)(C)O = 4 heavy atoms
-        ("C[*:1]", 2),  # one R-group → C
+        (
+            "C([*:1])([*:2])O",
+            4,
+        ),  # verify that replacing two R-groups with carbon results in 4 heavy atoms.
+        ("C[*:1]", 2),  # verify that replacing one R-group with carbon results in 2 heavy atoms.
     ],
 )
 def test_create_empty(core_smiles: str, expected_atoms: int) -> None:
@@ -37,8 +40,10 @@ def test_create_empty(core_smiles: str, expected_atoms: int) -> None:
 @pytest.mark.parametrize(
     "smiles_list",
     [
-        ["Cc1ccccc1", "CCc1ccccc1"],  # methyl and ethyl benzene → ring R-group coverage
-        ["c1ccc(-c2ccccc2)cc1"],  # biphenyl → phenyl R-group with ring → get_ring_fill
+        ["Cc1ccccc1", "CCc1ccccc1"],  # verify ring R-group coverage using methyl and ethyl benzene.
+        [
+            "c1ccc(-c2ccccc2)cc1"
+        ],  # verify phenyl R-group with ring using biphenyl to test get_ring_fill.
     ],
 )
 def test_draw_single(smiles_list: list[str]) -> None:

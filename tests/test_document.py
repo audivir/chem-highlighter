@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.hml.Document, the multi-molecule counterpart to Molecule."""
+"""Tests for chem_highlighter.hml.Document."""
 
 from __future__ import annotations
 
@@ -10,21 +10,18 @@ from chem_highlighter.hml import InputFormatNotSupported, OutputFormatNotSupport
 
 
 def _make_sdf(smiles_list: list[str]) -> str:
-    """Concatenate several single-record SDF exports into one multi-record SDF."""
+    """Concatenate single-record SDF exports into multi-record SDF."""
     return "".join(
         RDKitMolecule.from_string(smi, "SMILES").export_string("SDF") for smi in smiles_list
     )
 
 
 def _make_rxn(reactant_smiles: str, product_smiles: str) -> str:
-    """Build a minimal $RXN block with one reactant and one product."""
+    """Build minimal $RXN block from single reactant and product."""
     from rdkit.Chem import rdChemReactions
 
     rxn = rdChemReactions.ReactionFromSmarts(f"{reactant_smiles}>>{product_smiles}", useSmiles=True)
     return rdChemReactions.ReactionToRxnBlock(rxn)
-
-
-# --- from_bytes: SDF -----------------------------------------------------------------------
 
 
 def test_from_bytes_sdf_reads_every_record() -> None:
@@ -47,13 +44,10 @@ def test_from_bytes_sdf_garbage_raises() -> None:
         RDKitDocument.from_bytes(b"invalid input", "SDF")
 
 
-# --- from_bytes: RXN -------------------------------------------------------------------------
-
-
 def test_from_bytes_rxn_reads_reactants_then_agents_then_products() -> None:
     block = _make_rxn("CCO", "CC=O")
     doc = RDKitDocument.from_bytes(block.encode(), "RXN")
-    # MDL RXN files have no distinct agent section -- only reactants then products.
+    # mdl rxn files lack a distinct agent section and contain only reactants and products.
     assert len(doc) == 2
     smiles = [m.export_string("SMILES") for m in doc.molecules]
     assert smiles == ["CCO", "CC=O"]
@@ -70,14 +64,11 @@ def test_from_bytes_rxn_garbage_raises() -> None:
         RDKitDocument.from_bytes(b"invalid input", "RXN")
 
 
-# --- from_bytes: CDXML -------------------------------------------------------------------------
-
-
 def test_from_bytes_cdxml_allows_multiple_molecules() -> None:
     doc = RDKitDocument.from_bytes(read_fixture("two_mols.cdxml").encode(), "CDXML")
     assert len(doc) == 2
     assert doc.molecule(0) is not doc.molecule(1)
-    # Each molecule round-trips independently through its own export_string.
+    # verify each molecule round-trips independently via export_string.
     assert doc.molecule(0).kekulize(False).export_string("SMILES") == "c1ccccc1"
     assert doc.molecule(1).kekulize(False).export_string("SMILES") == "c1ccccc1"
 
@@ -90,9 +81,6 @@ def test_from_bytes_cdxml_single_molecule() -> None:
 def test_from_bytes_cdxml_no_molecules_raises() -> None:
     with pytest.raises((ValueError, RuntimeError), match="Invalid CDXML input"):
         RDKitDocument.from_bytes(read_fixture("no_mol.cdxml").encode(), "CDXML")
-
-
-# --- from_bytes: SMILES ------------------------------------------------------------------------
 
 
 def test_from_bytes_smiles_splits_fragments() -> None:
@@ -117,9 +105,6 @@ def test_from_bytes_smiles_garbage_raises() -> None:
         RDKitDocument.from_bytes(b"invalid input", "SMILES")
 
 
-# --- from_bytes: single-molecule delegation (Mol, InChI, CDX) ----------------------------------
-
-
 def test_from_bytes_mol_is_single_molecule() -> None:
     molblock = RDKitMolecule.from_string("CCO", "SMILES").to_molblock()
     doc = RDKitDocument.from_bytes(molblock.encode(), "Mol")
@@ -136,9 +121,6 @@ def test_from_bytes_inchi_is_single_molecule() -> None:
 def test_from_bytes_cdx_still_unsupported() -> None:
     with pytest.raises(InputFormatNotSupported, match="does not support importing from CDX"):
         RDKitDocument.from_bytes(b"", "CDX")
-
-
-# --- __init__ / __len__ / molecule ---------------------------------------------------------
 
 
 def test_document_requires_at_least_one_molecule() -> None:
@@ -164,9 +146,6 @@ def test_document_molecule_out_of_range_raises_index_error() -> None:
         doc.molecule(2)
 
 
-# --- export / export_string ------------------------------------------------------------------
-
-
 def test_export_with_molecule_ix_delegates_to_that_molecule() -> None:
     doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     assert doc.export_string("SMILES", molecule_ix=0) == doc.molecule(0).export_string("SMILES")
@@ -177,7 +156,7 @@ def test_export_sdf_concatenates_every_molecule() -> None:
     doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
     output = doc.export_string("SDF")
     assert output.count("$$$$") == 2
-    # roundtrips back into the same number of records
+    # verify round-trip preserves record count.
     reparsed = RDKitDocument.from_bytes(output.encode(), "SDF")
     assert len(reparsed) == 2
 

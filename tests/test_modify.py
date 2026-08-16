@@ -1,4 +1,4 @@
-"""Test the chem_highlighter.modify module."""
+"""Tests for the modify module."""
 
 from __future__ import annotations
 
@@ -550,7 +550,7 @@ def test_rotate_and_flip(angle_deg: float, q_file: str, atol: float) -> None:
     q = apply_transform(q, -angle_deg, atol=atol)
     assert is_same_conformer(q, q_orig, atol=atol)
 
-    # flip
+    # test horizontal and vertical flips.
     horizontal = apply_transform(q_orig, angle_deg, flip_horizontal=True, atol=atol)
     vertical = apply_transform(q_orig, angle_deg + 180.0, flip_vertical=True, atol=atol)
     assert is_same_conformer(horizontal, vertical, atol=atol)

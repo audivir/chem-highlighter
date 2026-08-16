@@ -1,4 +1,4 @@
-"""Rejoin decomposed molecules."""
+"""Rejoin decomposed molecular fragments into a complete structure."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ if TYPE_CHECKING:
 
 
 def get_sole_neighbor(atom: Chem.Atom) -> Chem.Atom:
-    """Get the sole neighboring atom of the given RDKit atom.
+    """Retrieve the single neighboring atom of the given atom.
 
     Raises:
-        ValueError: If the molecule has no or more than one neighbor.
+        ValueError: If the atom has zero or multiple neighbors.
     """
     neighbors = get_neighbors(atom)
     if len(neighbors) != 1:
@@ -34,15 +34,15 @@ def get_mapped_atoms(mol: Chem.Mol, on: int, num: Literal[2]) -> tuple[Chem.Atom
 def get_mapped_atoms(
     mol: Chem.Mol, on: int, num: Literal[1, 2] = 2
 ) -> tuple[Chem.Atom, Chem.Atom] | Chem.Atom:
-    """Get the indices of the atoms with the atom map number `on`.
+    """Retrieve atoms with the specified atom map number.
 
     Args:
-        mol: The molecule.
-        on: The atom map number.
-        num: The number of atoms. Defaults to 2.
+        mol: Target molecule.
+        on: Atom map number to search for.
+        num: Required number of atoms to find.
 
     Raises:
-        ValueError: If the number of atoms with the atom map number `on` is not `num`.
+        ValueError: If the count of atoms with map number `on` does not equal `num`.
     """
     mapped_atoms = [atom for atom in get_atoms(mol) if atom.GetAtomMapNum() == on]
     if len(mapped_atoms) != num:
@@ -58,10 +58,15 @@ def get_mapped_atoms(
 
 
 def mask_hydrogens(mol: Chem.Mol, on: int, symbol: str = "I") -> Chem.Mol:
-    """Mask hydrogens next to mapped atoms with a non-hydrogen symbol.
+    """Replace hydrogens adjacent to mapped atoms with a specified non-hydrogen symbol.
+
+    Args:
+        mol: Target molecule.
+        on: Atom map number to identify the target atom.
+        symbol: Element symbol used for masking.
 
     Raises:
-        ValueError: If the mask symbol is already in the molecule.
+        ValueError: If the mask symbol is already present in the molecule.
     """
     from rdkit import Chem
     from rdkit.Chem.rdchem import GetPeriodicTable
@@ -87,7 +92,7 @@ def mask_hydrogens(mol: Chem.Mol, on: int, symbol: str = "I") -> Chem.Mol:
 
 
 def clear_special_isotopes(mol: Chem.Mol) -> Chem.Mol:
-    """Remove all special (200+, 300+) isotopes from the molecule."""
+    """Normalize special isotopes by removing offsets of 200 or 400."""
     from rdkit import Chem
 
     mol = Chem.Mol(mol)
@@ -104,20 +109,13 @@ def clear_special_isotopes(mol: Chem.Mol) -> Chem.Mol:
 
 
 def join_mols(mol_a: Chem.Mol, mol_b: Chem.Mol, on: int, order: BondType | None = None) -> Chem.Mol:
-    """Join a pair of molecules on a [*:`on`] marked atom.
-
-    Usage:
-        >>> mol_a = Chem.MolFromSmiles("CC[*:1]")
-        >>> mol_b = Chem.MolFromSmiles("CO[*:1]")
-        >>> mol_c = join_mols(mol_a, mol_b, on=1)
-        >>> Chem.MolToSmiles(mol_c)
-        'CCOC'
+    """Join two molecules at atoms sharing the specified atom map number.
 
     Args:
-        mol_a: The first molecule.
-        mol_b: The second molecule.
-        on: The atom map number.
-        order: The bond order. Defaults to `BondType.SINGLE`.
+        mol_a: First molecule.
+        mol_b: Second molecule.
+        on: Atom map number to join on.
+        order: Bond order for the new connection.
 
     Returns:
         The joined molecule.
@@ -139,14 +137,12 @@ def join_mols(mol_a: Chem.Mol, mol_b: Chem.Mol, on: int, order: BondType | None 
     a_neighbor = get_sole_neighbor(a_atom)
     b_neighbor = get_sole_neighbor(b_atom)
 
-    # Remove old bonds
     mol_c.RemoveBond(a_atom.GetIdx(), a_neighbor.GetIdx())
     mol_c.RemoveBond(b_atom.GetIdx(), b_neighbor.GetIdx())
 
-    # Add new bond
     mol_c.AddBond(a_neighbor.GetIdx(), b_neighbor.GetIdx(), order=order)
 
-    # Remove the mapped atoms
+    # remove mapped atoms.
     mol_c.RemoveAtom(a_atom.GetIdx())
 
     c_atom = get_mapped_atoms(mol_c, on, 1)
@@ -157,21 +153,12 @@ def join_mols(mol_a: Chem.Mol, mol_b: Chem.Mol, on: int, order: BondType | None 
 
 
 def join_multiple(core: Chem.Mol, groups: dict[str, Chem.Mol]) -> Chem.Mol:
-    """Join multiple molecules to a core.
-
-    Usage:
-        >>> core = Chem.MolFromSmiles("C(O[*:2])C[*:1]")
-        >>> groups = {
-        ...     "R1": Chem.MolFromSmiles("CO[*:1]"),
-        ...     "R2": Chem.MolFromSmiles("CC[*:2]"),
-        ... }
-        >>> joined = join_multiple(core, groups)
-        >>> Chem.MolToSmiles(joined)
-        'C(OCC)COC'
+    """Join multiple molecules to a core molecule.
 
     Args:
-        core: The core molecule with [*:`on`] marked atoms.
-        groups: The groups to join as with [*:`on`] marked atoms and `R{on}` keys.
+        core: Core molecule containing atoms marked with map numbers.
+        groups: Mapping of group identifiers (e.g., 'R1') to molecules containing
+            corresponding map numbers.
 
     Returns:
         The joined molecule.

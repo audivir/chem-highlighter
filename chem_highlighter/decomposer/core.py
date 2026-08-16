@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def create_qcore(core: str | Chem.Mol) -> Chem.Mol:
-    """Create a query core."""
+    """Create query core molecule."""
     from rdkit import Chem
     from rdkit.Chem import rdDepictor
 
@@ -32,7 +32,7 @@ def create_qcore(core: str | Chem.Mol) -> Chem.Mol:
 
 
 def set_source_idx(mols: Sequence[Chem.Mol]) -> None:
-    """Set the source index for all atoms in each molecule."""
+    """Set source indices for all atoms in each molecule."""
     for mol in mols:
         for atom in get_atoms(mol):
             atom.SetIntProp("SourceAtomIdx", atom.GetIdx())
@@ -41,7 +41,7 @@ def set_source_idx(mols: Sequence[Chem.Mol]) -> None:
 def decompose(
     core: str | Chem.Mol, data: Sequence[str | Chem.Mol]
 ) -> tuple[Chem.Mol, dict[int, tuple[Chem.Mol, dict[str, Chem.Mol]]]]:
-    """Decompose a set of molecules around a common core structure."""
+    """Decompose a set of molecules around common core structure."""
     from rdkit import Chem
     from rdkit.Chem import rdRGroupDecomposition
 
@@ -72,13 +72,13 @@ def decompose(
 
 
 def check_legends(n_mols: int, legends: Sequence[str] | None = None) -> list[str | None]:
-    """Find matching molecules."""
+    """Align molecule legends with the number of molecules."""
     return [legend or None for legend in legends] if legends else [None] * n_mols
 
 
 @dataclass
 class DecomposedMol:
-    """A decomposed molecule."""
+    """Encapsulates molecule decomposed into core and peripheral groups."""
 
     qcore: Chem.Mol
     complete: Chem.Mol
@@ -87,20 +87,20 @@ class DecomposedMol:
 
     @property
     def labels(self) -> list[str]:
-        """Keys without Core key."""
+        """Return group keys that start with 'R', excluding core key."""
         return [k for k in self.groups if k.startswith("R")]
 
     @property
     def core(self) -> Chem.Mol:
-        """The core."""
+        """Return core molecule group."""
         return self.groups["Core"]
 
 
 class DecomposedList:
-    """Validates an Iterable of DecomposedMol objects."""
+    """Container for a validated collection of DecomposedMol objects."""
 
     def __init__(self, decomposed_mols: Iterable[DecomposedMol]) -> None:  # pragma: no cover
-        """Initialize the decomposed list."""
+        """Initialize and validate the collection of decomposed molecules."""
         self._decomposed = list(decomposed_mols)
 
         if not self._decomposed:
@@ -125,7 +125,6 @@ class DecomposedList:
             labels_counter = Counter(x.labels for x in self._decomposed)
             raise ValueError(f"All molecules must have the same labels: {labels_counter}")
 
-        ## All have to be different
         complete_smis = [mol_to_smiles(x.complete) for x in self._decomposed]
         if len(complete_smis) != len(set(complete_smis)):
             dups = [k for k, v in Counter(complete_smis).items() if v > 1]
@@ -145,7 +144,7 @@ class DecomposedList:
         return iter(self._decomposed)
 
     def build_rdata(self) -> dict[str, list[Chem.Mol]]:
-        """Build the rdata."""
+        """Group molecules by their associated labels."""
         rdata: dict[str, list[Chem.Mol]] = {key: [] for key in self.labels}
         for x in self:
             for key in self.labels:
@@ -154,10 +153,10 @@ class DecomposedList:
 
 
 class Core:
-    """Core class."""
+    """Manages core structure for molecular decomposition."""
 
     def __init__(self, data: str | Chem.Mol) -> None:
-        """Initialize the core."""
+        """Initialize core molecular structure from SMILES string or molecule object."""
         self.mol = get_smiles_mol_pair(data).mol
 
     def decompose(
@@ -166,9 +165,10 @@ class Core:
         legends: Sequence[str] | None = None,
         skip_cores: Iterable[str] | None = None,
     ) -> tuple[DecomposedList, list[int]]:
-        """Decompose a list of SMILES into R-groups.
+        """Decompose a list of SMILES or molecules into R-groups.
 
-        Returns the DecomposedList and the non-matching indices.
+        Returns:
+            A tuple containing the decomposed list and indices of non-matching inputs.
         """
         final_legends = check_legends(len(data), legends)
 

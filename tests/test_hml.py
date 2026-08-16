@@ -1,4 +1,4 @@
-"""Tests for chem_highlighter.hml."""
+"""Tests for the hml module."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def test_to_png(doc: HighlightBackendMolecule) -> None:
 
 @pytest.mark.parametrize("canonical", [True, False])
 def test_to_console_default_implementation(canonical: bool, doc: HighlightBackendMolecule) -> None:
-    # RDKitMolecule overrides `to_console`; call the base implementation directly.
+    # call base implementation directly as RDKitMolecule overrides to_console.
     assert HighlightBackendMolecule.to_console(doc, canonical=canonical)
 
 
@@ -177,8 +177,7 @@ def test_add_label(doc: HighlightBackendMolecule) -> None:
     before = doc.to_svg()
     doc.add_label("Compound 1")
     assert doc.get_label() == "Compound 1"
-    # RDKit draws the legend as vector paths, not literal `<text>`, so the string itself
-    # doesn't appear in the SVG -- check it actually changed the rendering instead.
+    # verify rendering change because RDKit draws legends as vector paths rather than text.
     assert doc.to_svg() != before
     assert 'class="legend"' in doc.to_svg()
 
