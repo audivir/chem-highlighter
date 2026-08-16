@@ -113,7 +113,7 @@ def replace_atom(svg: str, decomposed: DecomposedMol, symbol: str = "I") -> str:
 def fix_decomposed(
     decomposed: DecomposedList, equivalents: Sequence[tuple[int, int]] | None = None
 ) -> tuple[DecomposedList, dict[str, list[Chem.Mol]]]:
-    """Reorder R-groups in the decomposed list by equivalence and return updated per-position lists."""
+    """Reorder R-groups in decomposed list by equivalence and return updated per-position lists."""
     rdata = decomposed.build_rdata()
 
     if equivalents is None:
@@ -142,7 +142,8 @@ def plot_decomposed(  # noqa: PLR0913,PLR0917
     """Render the most common R-group for each position with a frequency-scaled colorbar.
 
     Returns:
-        Tuple containing the final DecomposedMol, highlighted document, SVG string, and molecule axes.
+        Tuple containing the final DecomposedMol, highlighted document, SVG string,
+        and molecule axes.
     """
     import matplotlib as mpl
     from matplotlib.figure import Figure

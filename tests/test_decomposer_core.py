@@ -153,7 +153,8 @@ def test_core_decompose_all_nonmatching_raises() -> None:
 
 
 def test_core_decompose_partial_match_preserves_original_indices() -> None:
-    # verify that non-matching molecules are excluded while matching molecules preserve original indices.
+    # verify that non-matching molecules are excluded
+    # and matching molecules preserve original indices.
     decomposed, non_matched = Core("OCCCO").decompose(["COCCCOS", "CCC", "NOCCCOP"])
     assert non_matched == [1]
     assert len(decomposed) == 2

@@ -52,7 +52,8 @@ def map_smiles_tokens(  # noqa: PLR0915
             orig_atom_ix = atom_order[atom_ix]
             current_atom_index = orig_atom_ix
 
-            # ensure multi-character tokens (e.g., [nH], Cl) are handled as single units to avoid downstream failure.
+            # TODO(tihoph): ensure multi-character tokens (e.g., [nH], Cl) are handled as
+            # single units to avoid downstream failure.
             token_maps.append(SmilesTokenMap(token_chars, "atom", "atom", orig_atom_ix))
 
             atom_ix += 1

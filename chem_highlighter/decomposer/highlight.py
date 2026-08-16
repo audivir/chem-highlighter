@@ -106,7 +106,7 @@ def complete_smiles(  # pragma: no cover
 
 
 def create_empty(core: Mol) -> Chem.Mol:
-    """Generate empty core by replacing R-group placeholders with carbons and removing empty branches."""
+    """Generate empty core by replacing R-group dummies with Cs and removing empty branches."""
     core_smi = mol_to_smiles(core)
     empty = re.sub(r"\[\*\:\d+\]", "C", core_smi)
     empty = remove_empty_branches(empty)

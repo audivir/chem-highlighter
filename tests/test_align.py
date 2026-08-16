@@ -134,7 +134,6 @@ def test_flip_misaligned_bonds(
 
 
 def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float) -> None:
-    """Verify flip_misaligned_bonds selects correct anchor when query and reference use different atom numbering."""
     # Cl-C-C-F chain with one rotatable bond to test a single flip decision.
     b, c, a = (0.0, 0.0, 0.0), (1.5, 0.0, 0.0), (-1.0, 1.3, 0.0)
 
@@ -144,7 +143,8 @@ def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float
 
     # query Cl-Ca-Cb-F chain with 0 degree dihedral.
     query = _chain_mol(["Cl", "C", "C", "F"], [a, b, c, d_at(0.0)])
-    # reference Cl-Ca-Cb-F chain with reversed atom numbering and 170 degree dihedral to force a flip.
+    # reference Cl-Ca-Cb-F chain with reversed atom numbering and
+    # 170 degree dihedral to force a flip.
     reference = _chain_mol(["F", "C", "C", "Cl"], [d_at(170.0), c, b, a])
 
     mcs_match = find_mcs(query, reference)

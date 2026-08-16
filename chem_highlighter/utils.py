@@ -271,11 +271,7 @@ def recenter_mol(
 
 
 def flatten_conformer_z(mol: Chem.Mol, conf: Chem.Conformer, atol: float) -> None:
-    """Set all atom Z-coordinates in the conformer to 0.0.
-
-    Args:
-        atol: Tolerance threshold for logging Z-coordinate deviations.
-    """
+    """Set all atom Z-coordinates in the conformer to 0.0."""
     from rdkit.Geometry import Point3D
 
     for ix in range(mol.GetNumAtoms()):

@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Literal
 import msgspec
 import pytest
 from utils import extract_bond_codes, from_fixture_molblock, mol_from_explicit_smiles, read_fixture
-
 from chem_highlighter.hml import (
     HML,
+    AsyncHighlightBackendMolecule,
     AsyncHighlightBackendMoleculeT_co,
     InputFormat,
     InputFormatNotSupported,
@@ -133,9 +133,7 @@ async def assert_cleanup(
 
 
 async def assert_kekulize(backend: type[AsyncHighlightBackendMoleculeT_co]) -> None:
-    async def assert_benzene_kekulized(
-        doc: AsyncHighlightBackendMoleculeT_co, kekulized: bool
-    ) -> None:
+    async def assert_benzene_kekulized(doc: AsyncHighlightBackendMolecule, kekulized: bool) -> None:
         assert doc.get_edit_state() == (kekulized, False, False)
         bond_type_codes = extract_bond_codes(await doc.to_molblock())
         kekule_bonds = [[1 if i % 2 == modulo else 2 for i in range(6)] for modulo in (0, 1)]

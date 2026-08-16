@@ -520,7 +520,7 @@ class AsyncHighlightBackendMolecule(ABC):
 
 
 class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
-    """Base class for a collection of molecules parsed from a single input and laid out on a canvas."""
+    """Base class for a collection of molecules parsed from single input and placed on a canvas."""
 
     def __init__(
         self,
