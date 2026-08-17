@@ -1,4 +1,4 @@
-"""Rejoin decomposed molecular fragments into a complete structure."""
+"""Rejoin decomposed molecular fragments into complete structure."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ if TYPE_CHECKING:
 
 
 def get_sole_neighbor(atom: Chem.Atom) -> Chem.Atom:
-    """Retrieve the single neighboring atom of the given atom.
+    """Retrieve single neighboring atom.
 
     Raises:
-        ValueError: If the atom has zero or multiple neighbors.
+        ValueError: If atom has zero or multiple neighbors.
     """
     neighbors = get_neighbors(atom)
     if len(neighbors) != 1:
@@ -34,7 +34,7 @@ def get_mapped_atoms(mol: Chem.Mol, on: int, num: Literal[2]) -> tuple[Chem.Atom
 def get_mapped_atoms(
     mol: Chem.Mol, on: int, num: Literal[1, 2] = 2
 ) -> tuple[Chem.Atom, Chem.Atom] | Chem.Atom:
-    """Retrieve atoms with the specified atom map number.
+    """Retrieve atoms with specified atom map number.
 
     Args:
         mol: Target molecule.
@@ -42,7 +42,7 @@ def get_mapped_atoms(
         num: Required number of atoms to find.
 
     Raises:
-        ValueError: If the count of atoms with map number `on` does not equal `num`.
+        ValueError: If count of atoms with map number `on` does not equal `num`.
     """
     mapped_atoms = [atom for atom in get_atoms(mol) if atom.GetAtomMapNum() == on]
     if len(mapped_atoms) != num:
@@ -58,15 +58,15 @@ def get_mapped_atoms(
 
 
 def mask_hydrogens(mol: Chem.Mol, on: int, symbol: str = "I") -> Chem.Mol:
-    """Replace hydrogens adjacent to mapped atoms with a specified non-hydrogen symbol.
+    """Replace hydrogens adjacent to mapped atoms with specified non-hydrogen symbol.
 
     Args:
         mol: Target molecule.
-        on: Atom map number to identify the target atom.
+        on: Atom map number to identify target atom.
         symbol: Element symbol used for masking.
 
     Raises:
-        ValueError: If the mask symbol is already present in the molecule.
+        ValueError: If mask symbol is already present in molecule.
     """
     from rdkit import Chem
     from rdkit.Chem.rdchem import GetPeriodicTable
@@ -109,16 +109,16 @@ def clear_special_isotopes(mol: Chem.Mol) -> Chem.Mol:
 
 
 def join_mols(mol_a: Chem.Mol, mol_b: Chem.Mol, on: int, order: BondType | None = None) -> Chem.Mol:
-    """Join two molecules at atoms sharing the specified atom map number.
+    """Join two molecules at atoms sharing specified atom map number.
 
     Args:
         mol_a: First molecule.
         mol_b: Second molecule.
         on: Atom map number to join on.
-        order: Bond order for the new connection.
+        order: Bond order for new connection.
 
     Returns:
-        The joined molecule.
+        Joined molecule.
     """
     from rdkit import Chem
     from rdkit.Chem.rdchem import BondType
@@ -153,7 +153,7 @@ def join_mols(mol_a: Chem.Mol, mol_b: Chem.Mol, on: int, order: BondType | None 
 
 
 def join_multiple(core: Chem.Mol, groups: dict[str, Chem.Mol]) -> Chem.Mol:
-    """Join multiple molecules to a core molecule.
+    """Join multiple molecules to core molecule.
 
     Args:
         core: Core molecule containing atoms marked with map numbers.
@@ -161,7 +161,7 @@ def join_multiple(core: Chem.Mol, groups: dict[str, Chem.Mol]) -> Chem.Mol:
             corresponding map numbers.
 
     Returns:
-        The joined molecule.
+        Joined molecule.
     """
     for key, mol in groups.items():
         if not key.startswith("R"):  # pragma: no cover

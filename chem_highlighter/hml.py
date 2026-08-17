@@ -48,15 +48,15 @@ OutputFormat: TypeAlias = InputFormat | Literal["InChIKey", "SVG", "EPS", "PNG"]
 
 
 class InputFormatNotSupported(Exception):  # noqa: N818
-    """Backend does not support specified input format."""
+    """Raised when backend does not support specified input format."""
 
 
 class OutputFormatNotSupported(Exception):  # noqa: N818
-    """Backend does not support specified output format."""
+    """Raised when backend does not support specified output format."""
 
 
 class HML(msgspec.Struct, kw_only=True):
-    """Encapsulates highlighting options for a molecule."""
+    """Encapsulates highlighting options for molecule."""
 
     highlighted_atoms: dict[int, int] = {}
     highlighted_bonds: dict[int, int] = {}
@@ -115,7 +115,7 @@ class HighlightBackendMolecule(ABC):
 
     @abstractmethod
     def get_edit_state(self) -> tuple[bool, bool, bool]:
-        """Return edit state tuple."""
+        """Return edit state."""
 
     @abstractmethod
     def set_edit_state(self, kekulized: bool, aligned: bool, hydrogens_hidden: bool) -> None:
@@ -124,17 +124,17 @@ class HighlightBackendMolecule(ABC):
     @classmethod
     @abstractmethod
     def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
-        """Initialize molecule from byte data."""
+        """Initialize molecule from bytes."""
 
     @final
     @classmethod
     def from_string(cls, data: str, fmt: InputFormat) -> Self:
-        """Initialize molecule from string data."""
+        """Initialize molecule from string."""
         return cls.from_bytes(data.encode(), fmt)
 
     @abstractmethod
     def export(self, fmt: OutputFormat, use_v2000: bool = False) -> bytes:
-        """Serialize molecule to specified format as bytes."""
+        """Serialize molecule to specified format."""
 
     @final
     def export_string(self, fmt: OutputFormat, use_v2000: bool = False) -> str:
@@ -143,15 +143,15 @@ class HighlightBackendMolecule(ABC):
 
     @abstractmethod
     def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
-        """Align bounding box to reference ratio and apply transformations."""
+        """Align bounding box to reference ratio."""
 
     @abstractmethod
     def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
-        """Align molecule to reference molblock and apply transformations."""
+        """Align molecule to reference molblock."""
 
     @final
     def align_to_reference(self, reference: str) -> Self:
-        """Align molecule to a reference molblock or bounding box ratio."""
+        """Align molecule to reference molblock or bounding box ratio."""
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
             raise ValueError("Already aligned")
@@ -197,7 +197,7 @@ class HighlightBackendMolecule(ABC):
 
     @final
     def kekulize(self, kekulize: bool) -> Self:
-        """Kekulize or dekekulize underlying molecule."""
+        """Kekulize or dekekulize molecule."""
         self.kekulize_callback(kekulize)
         _, aligned, hydrogens_hidden = self.get_edit_state()
         self.set_edit_state(kekulize, aligned, hydrogens_hidden)
@@ -225,7 +225,7 @@ class HighlightBackendMolecule(ABC):
 
     @final
     def highlight_from_json(self, hml_json: str, hide_hydrogens: bool = False) -> Self:
-        """Apply highlighting options and execute backend callback."""
+        """Apply highlighting options via backend callback."""
         if self.get_hml_json():
             raise ValueError("Already highlighted")
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
@@ -250,7 +250,7 @@ class HighlightBackendMolecule(ABC):
 
     @final
     def add_label(self, text: str) -> Self:
-        """Add bold, centered label below the molecule."""
+        """Add bold, centered label below molecule."""
         if self.get_label() is not None:
             raise ValueError("Already labeled")
         self.set_label(text)
@@ -266,7 +266,7 @@ class HighlightBackendMolecule(ABC):
     @final
     @classmethod
     def from_molblock(cls, molblock: str) -> Self:
-        """Create a molecule from a molblock string."""
+        """Create molecule from molblock string."""
         return cls.from_string(molblock, "Mol")
 
     def to_molblock(self) -> str:
@@ -274,22 +274,22 @@ class HighlightBackendMolecule(ABC):
         return self.export_string("Mol")
 
     def to_svg(self) -> str:
-        """Export molecule as SVG visualization, including highlighting if configured."""
+        """Export molecule as SVG visualization with optional highlighting."""
         return self.export_string("SVG")
 
     def to_png(self) -> bytes:
-        """Export molecule as PNG visualization, including highlighting if configured."""
+        """Export molecule as PNG visualization with optional highlighting."""
         return self.export("PNG")
 
     def to_console(self, canonical: bool = True) -> str:
-        """Export molecule as string visualization, including highlighting if configured."""
+        """Export molecule as string visualization with optional highlighting."""
         os.environ["FORCE_COLOR"] = "1"
         kekulized, _, _ = self.get_edit_state()
         return _render_console(self.to_molblock(), kekulized, self.get_hml_json(), canonical)
 
 
 def _render_console(molblock: str, kekulized: bool, hml_json: str | None, canonical: bool) -> str:
-    """Render a molecule to a console-compatible string visualization."""
+    """Render molecule as console-compatible string visualization."""
     from rdkit import Chem
 
     mol = Chem.MolFromMolBlock(molblock, removeHs=False)
@@ -327,7 +327,7 @@ def _render_console(molblock: str, kekulized: bool, hml_json: str | None, canoni
 
 
 class AsyncHighlightBackendMolecule(ABC):
-    """Asynchronous interface for molecule highlighting backends."""
+    """Interface for asynchronous molecule highlighting backends."""
 
     @abstractmethod
     def get_hml_json(self) -> str | None:
@@ -339,7 +339,7 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     def get_edit_state(self) -> tuple[bool, bool, bool]:
-        """Return edit state tuple."""
+        """Return edit state."""
 
     @abstractmethod
     def set_edit_state(self, kekulized: bool, aligned: bool, hydrogens_hidden: bool) -> None:
@@ -348,12 +348,12 @@ class AsyncHighlightBackendMolecule(ABC):
     @classmethod
     @abstractmethod
     async def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
-        """Initialize a molecule from byte data."""
+        """Initialize molecule from byte data."""
 
     @final
     @classmethod
     async def from_string(cls, data: str, fmt: InputFormat) -> Self:
-        """Initialize a molecule from string data."""
+        """Initialize molecule from string data."""
         return await cls.from_bytes(data.encode(), fmt)
 
     @abstractmethod
@@ -367,11 +367,11 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     async def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
-        """Compute and apply alignment operations to fit a bounding box ratio."""
+        """Align bounding box to reference ratio."""
 
     @abstractmethod
     async def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
-        """Compute and apply alignment operations against a reference molblock."""
+        """Align molecule to reference molblock."""
 
     @final
     async def align_to_reference(self, reference: str) -> Self:
@@ -389,7 +389,7 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     async def cleanup_callback(self) -> None:
-        """Execute after cleanup checks."""
+        """Execute post-cleanup logic."""
 
     @final
     async def cleanup(self) -> Self:
@@ -417,11 +417,11 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     async def kekulize_callback(self, kekulize: bool) -> None:
-        """Execute after kekulization checks."""
+        """Execute post-kekulization logic."""
 
     @final
     async def kekulize(self, kekulize: bool) -> Self:
-        """Kekulize or dekekulize molecule."""
+        """Set kekulization state of molecule."""
         await self.kekulize_callback(kekulize)
         _, aligned, hydrogens_hidden = self.get_edit_state()
         self.set_edit_state(kekulize, aligned, hydrogens_hidden)
@@ -429,7 +429,7 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     async def hide_hydrogens_callback(self) -> None:
-        """Execute after hydrogen hiding checks."""
+        """Execute post-hydrogen-hiding logic."""
 
     @final
     async def hide_hydrogens(self) -> Self:
@@ -447,11 +447,11 @@ class AsyncHighlightBackendMolecule(ABC):
     async def highlight_from_json_callback(
         self, hml_json: str, hide_hydrogens: bool = False
     ) -> None:
-        """Execute after highlighting options are set."""
+        """Execute post-highlighting logic."""
 
     @final
     async def highlight_from_json(self, hml_json: str, hide_hydrogens: bool = False) -> Self:
-        """Set highlighting options and execute backend callback."""
+        """Apply highlighting from JSON and execute backend callback."""
         if self.get_hml_json():
             raise ValueError("Already highlighted")
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
@@ -464,7 +464,7 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     def get_label(self) -> str | None:
-        """Return label text, if set."""
+        """Return label text if set."""
 
     @abstractmethod
     def set_label(self, label: str) -> None:
@@ -472,11 +472,11 @@ class AsyncHighlightBackendMolecule(ABC):
 
     @abstractmethod
     async def add_label_callback(self, text: str) -> None:
-        """Execute after label validation passes."""
+        """Execute post-label validation logic."""
 
     @final
     async def add_label(self, text: str) -> Self:
-        """Add bold, centered label below the molecule."""
+        """Add bold, centered label below molecule."""
         if self.get_label() is not None:
             raise ValueError("Already labeled")
         self.set_label(text)
@@ -500,15 +500,15 @@ class AsyncHighlightBackendMolecule(ABC):
         return await self.export_string("Mol")
 
     async def to_svg(self) -> str:
-        """Export molecule as SVG visualization, including highlights if configured."""
+        """Export molecule as SVG visualization with optional highlights."""
         return await self.export_string("SVG")
 
     async def to_png(self) -> bytes:
-        """Export molecule as PNG visualization, including highlights if configured."""
+        """Export molecule as PNG visualization with optional highlights."""
         return await self.export("PNG")
 
     async def to_console(self, canonical: bool = True) -> str:
-        """Export molecule as console string visualization, including highlights if configured."""
+        """Export molecule as console string visualization with optional highlights."""
         os.environ["FORCE_COLOR"] = "1"
         kekulized, _, _ = self.get_edit_state()
         molblock = await self.to_molblock()
@@ -528,7 +528,7 @@ class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
         source_format: InputFormat,
         offsets: list[tuple[float, float]] | None = None,
     ) -> None:
-        """Initialize document using a sequence of pre-constructed molecules."""
+        """Initialize document with a sequence of pre-constructed molecules."""
         if not molecules:
             raise ValueError("Document requires at least one molecule")
         if offsets is not None and len(offsets) != len(molecules):
@@ -542,13 +542,13 @@ class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
         return len(self.molecules)
 
     def molecule(self, ix: int) -> HighlightBackendMoleculeT_co:
-        """Retrieve molecule at specified index."""
+        """Retrieve molecule at index."""
         return self.molecules[ix]
 
     @classmethod
     @abstractmethod
     def _split_bytes(cls, data: bytes, fmt: InputFormat) -> list[HighlightBackendMoleculeT_co]:
-        """Parse data into a sequence of molecules."""
+        """Parse data into sequence of molecules."""
 
     @final
     @classmethod
@@ -559,7 +559,7 @@ class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
     @final
     @classmethod
     def from_string(cls, data: str, fmt: InputFormat) -> Self:
-        """Create document from string data."""
+        """Create document from string."""
         return cls.from_bytes(data.encode(), fmt)
 
     @final
@@ -576,7 +576,7 @@ class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
 
     @abstractmethod
     def _combined_export(self, fmt: Literal["SVG", "PNG"]) -> bytes:
-        """Render all molecules on a single canvas using their offsets."""
+        """Render all molecules on single canvas using offsets."""
 
     def export(
         self, fmt: OutputFormat, use_v2000: bool = False, molecule_ix: int | None = None
@@ -609,23 +609,23 @@ class Document(ABC, Generic[HighlightBackendMoleculeT_co]):
 
     @final
     def to_svg(self, molecule_ix: int | None = None) -> str:
-        """Export document or specific molecule as SVG visualization."""
+        """Export document or specific molecule as SVG."""
         return self.export_string("SVG", molecule_ix=molecule_ix)
 
     @final
     def to_png(self, molecule_ix: int | None = None) -> bytes:
-        """Export document or specific molecule as PNG visualization."""
+        """Export document or specific molecule as PNG."""
         return self.export("PNG", molecule_ix=molecule_ix)
 
     def to_console(self, canonical: bool = True, molecule_ix: int | None = None) -> str:
-        """Export document or specific molecule as string visualization."""
+        """Export document or specific molecule as string."""
         if molecule_ix is not None:
             return self.molecule(molecule_ix).to_console(canonical=canonical)
         return ".".join(m.to_console(canonical=canonical) for m in self.molecules)
 
 
 class AsyncDocument(ABC, Generic[AsyncHighlightBackendMoleculeT_co]):
-    """Asynchronous counterpart to `Document`."""
+    """Asynchronous base class for `Document`."""
 
     def __init__(
         self,
@@ -633,7 +633,7 @@ class AsyncDocument(ABC, Generic[AsyncHighlightBackendMoleculeT_co]):
         source_format: InputFormat,
         offsets: list[tuple[float, float]] | None = None,
     ) -> None:
-        """Initialize document using a sequence of pre-constructed molecules."""
+        """Initialize document with sequence of pre-constructed molecules."""
         if not molecules:
             raise ValueError("Document requires at least one molecule")
         if offsets is not None and len(offsets) != len(molecules):
@@ -647,7 +647,7 @@ class AsyncDocument(ABC, Generic[AsyncHighlightBackendMoleculeT_co]):
         return len(self.molecules)
 
     def molecule(self, ix: int) -> AsyncHighlightBackendMoleculeT_co:
-        """Retrieve molecule at specified index."""
+        """Retrieve molecule at index."""
         return self.molecules[ix]
 
     @classmethod
@@ -655,7 +655,7 @@ class AsyncDocument(ABC, Generic[AsyncHighlightBackendMoleculeT_co]):
     async def _split_bytes(
         cls, data: bytes, fmt: InputFormat
     ) -> list[AsyncHighlightBackendMoleculeT_co]:
-        """Parse data into a sequence of molecules."""
+        """Parse data into sequence of molecules."""
 
     @final
     @classmethod
@@ -666,7 +666,7 @@ class AsyncDocument(ABC, Generic[AsyncHighlightBackendMoleculeT_co]):
     @final
     @classmethod
     async def from_string(cls, data: str, fmt: InputFormat) -> Self:
-        """Create document from string data."""
+        """Create document from string."""
         return await cls.from_bytes(data.encode(), fmt)
 
     @final
@@ -683,7 +683,7 @@ class AsyncDocument(ABC, Generic[AsyncHighlightBackendMoleculeT_co]):
 
     @abstractmethod
     async def _combined_export(self, fmt: Literal["SVG", "PNG"]) -> bytes:
-        """Render all molecules on a single canvas using their offsets."""
+        """Render all molecules on single canvas using offsets."""
 
     async def export(
         self, fmt: OutputFormat, use_v2000: bool = False, molecule_ix: int | None = None

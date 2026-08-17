@@ -1,4 +1,4 @@
-"""Tests for the decomposer plot module."""
+"""Test decomposer plot module."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def test_change_map_atoms_leaves_other_map_numbers_unchanged() -> None:
 def test_change_map_atoms_does_not_mutate_input() -> None:
     mol = mol_from_smiles("C[*:1]")
     _change_map_atoms(mol, from_=1, to=9)
-    # verify the original molecule remains immutable.
+    # verify original molecule remains immutable.
     assert "[*:1]" in Chem.MolToSmiles(mol)
 
 
@@ -87,11 +87,11 @@ def test_fix_rdata_equivs_swaps_position_where_b_is_more_common() -> None:
 
     assert_mols_equal(fixed["R1"][0], "[H][*:1]")
     assert_mols_equal(fixed["R1"][1], "[H][*:1]")
-    assert_mols_equal(fixed["R1"][2], "[H][*:1]")  # was C[*:1].
+    assert_mols_equal(fixed["R1"][2], "[H][*:1]")  # swapped from C[*:1].
 
     assert_mols_equal(fixed["R2"][0], "C[*:2]")
     assert_mols_equal(fixed["R2"][1], "[H][*:2]")
-    assert_mols_equal(fixed["R2"][2], "C[*:2]")  # was [H][*:2].
+    assert_mols_equal(fixed["R2"][2], "C[*:2]")  # swapped from [H][*:2].
 
 
 def test_fix_rdata_equivs_no_swap_when_counts_are_equal() -> None:
@@ -147,7 +147,7 @@ def test_fix_decomposed_with_equivalents_returns_valid_molecules() -> None:
 
 
 def test_fix_decomposed_with_equivalents_preserves_per_molecule_substituents() -> None:
-    # substituent atom sets must remain identical regardless of equivalent applications.
+    # verify substituent atom sets remain identical regardless of equivalent applications.
     decomposed, _ = Core("OCCCO").decompose(["COCCCOS", "NOCCCOP"])
     _, rdata_plain = fix_decomposed(decomposed, equivalents=None)
     _, rdata_equiv = fix_decomposed(decomposed, equivalents=[(1, 2)])
@@ -170,7 +170,7 @@ def test_fix_decomposed_with_equivalents_preserves_per_molecule_substituents() -
 def test_fix_core_equivs() -> None:
     dummy = mol_from_smiles("C")
 
-    # create matching molecule to prevent SMILES comparison from triggering a swap.
+    # create matching molecule to prevent SMILES comparison from triggering swap.
     h_smi = mol_to_smiles(mol_from_smiles("[H][*:1]"))
     r1_match = mol_from_smiles(h_smi.replace("[H]", "I"))
     decomposed_match = DecomposedMol(
@@ -211,7 +211,7 @@ def test_replace_atom() -> None:
 
 def test_plot_decomposed() -> None:
     decomposed, _ = Core("c1ccccc1").decompose(["Cc1ccccc1", "CCc1ccccc1"])
-    # initialize internal figure, set colorbar label, and define axis limits.
+    # initialize figure, set colorbar label, and define axis limits.
     final, _, svg, _ = plot_decomposed(decomposed, title="test", ylim=(0.0, 1.0))
     assert "<svg" in svg
     assert final.labels

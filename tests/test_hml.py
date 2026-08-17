@@ -1,4 +1,4 @@
-"""Tests for the hml module."""
+"""Tests for hml module."""
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def test_to_png(doc: HighlightBackendMolecule) -> None:
 
 @pytest.mark.parametrize("canonical", [True, False])
 def test_to_console_default_implementation(canonical: bool, doc: HighlightBackendMolecule) -> None:
-    # call base implementation directly as RDKitMolecule overrides to_console.
+    # call base implementation directly because RDKitMolecule overrides to_console.
     assert HighlightBackendMolecule.to_console(doc, canonical=canonical)
 
 

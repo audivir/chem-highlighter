@@ -52,7 +52,7 @@ def _rect_mol(corners: Sequence[tuple[float, float]]) -> Chem.Mol:
 
 
 def _chain_mol(symbols: Sequence[str], positions: Sequence[tuple[float, float, float]]) -> Chem.Mol:
-    """Create straight-chain molecule with specified atom order and 3D positions."""
+    """Create straight-chain molecule from specified atom order and 3D positions."""
     mol = Chem.RWMol()
     for symbol in symbols:
         mol.AddAtom(Chem.Atom(symbol))
@@ -68,7 +68,7 @@ def _chain_mol(symbols: Sequence[str], positions: Sequence[tuple[float, float, f
 
 
 def _assert_angle_close(actual: float, expected: float, atol: float = 0.1) -> None:
-    """Assert that two angles in degrees match modulo 180."""
+    """Assert two angles in degrees match modulo 180."""
     diff = abs(actual - expected) % 180.0
     assert min(diff, 180.0 - diff) < atol
 
@@ -80,7 +80,7 @@ def test_get_2d_mol(atol: float) -> None:
 
 def test_get_2d_mol_raises_when_invalid(atol: float) -> None:
     with pytest.raises(ValueError, match="No coordinates available for molecule"):
-        get_2d_mol(mol_from_smiles("CCC"), atol=atol)  # smiiles-parsed molecule lacks a conformer.
+        get_2d_mol(mol_from_smiles("CCC"), atol=atol)  # molecule lacks conformer.
     with pytest.raises(ValueError, match="Molecule is a 3D molecule"):
         get_2d_mol(
             _3d_mol("C1CCCCC1")[0], atol=atol
@@ -134,7 +134,7 @@ def test_flip_misaligned_bonds(
 
 
 def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float) -> None:
-    # Cl-C-C-F chain with one rotatable bond to test a single flip decision.
+    # Cl-C-C-F chain with one rotatable bond to test single flip decision.
     b, c, a = (0.0, 0.0, 0.0), (1.5, 0.0, 0.0), (-1.0, 1.3, 0.0)
 
     def d_at(dihedral_deg: float) -> tuple[float, float, float]:
@@ -143,8 +143,7 @@ def test_flip_misaligned_bonds_with_independently_numbered_reference(atol: float
 
     # query Cl-Ca-Cb-F chain with 0 degree dihedral.
     query = _chain_mol(["Cl", "C", "C", "F"], [a, b, c, d_at(0.0)])
-    # reference Cl-Ca-Cb-F chain with reversed atom numbering and
-    # 170 degree dihedral to force a flip.
+    # reference Cl-Ca-Cb-F chain with reversed atom numbering and 170 degree dihedral to force flip.
     reference = _chain_mol(["F", "C", "C", "Cl"], [d_at(170.0), c, b, a])
 
     mcs_match = find_mcs(query, reference)
@@ -228,7 +227,7 @@ def assert_all_alignments(
             assert is_same_conformer(q, q_orig, atol=atol)
 
 
-# acetylic_acid.mol: use 14-degree increments to avoid failure at 30 degrees.
+# acetylic_acid.mol: use 32-degree increments to avoid failure at 30 degrees.
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 32)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
@@ -259,7 +258,7 @@ def test_get_alignment_flips_and_transform(
     assert_all_alignments(q_orig, allowed_flips, angle_deg, flip_horizontal, op_func, atol=atol)
 
 
-# acetylic_acid.mol: use 14-degree increments to avoid failure at 30 degrees.
+# acetylic_acid.mol: use 32-degree increments to avoid failure at 30 degrees.
 @pytest.mark.parametrize("angle_deg", list(range(0, 360, 32)))
 @pytest.mark.parametrize("flip_horizontal", [False, True])
 @pytest.mark.parametrize(
@@ -291,7 +290,7 @@ def test_get_alignment_ops_from_molblock(
 
 
 def test_get_best_fit_angle_matching_ratio_needs_no_rotation() -> None:
-    mol = _rect_mol([(-2.0, -1.0), (2.0, -1.0), (-2.0, 1.0), (2.0, 1.0)])  # 4x2 rectangle.
+    mol = _rect_mol([(-2.0, -1.0), (2.0, -1.0), (-2.0, 1.0), (2.0, 1.0)])  # 4x2 rectangle
     _assert_angle_close(get_best_fit_angle(mol, (2.0, 1.0)), 0.0)
 
 
@@ -310,7 +309,7 @@ def test_get_best_fit_angle_is_invariant_to_target_scale() -> None:
 
 @pytest.mark.parametrize("angle_step_deg", [15.0, 30.0, 45.0, 90.0])
 def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float, atol: float) -> None:
-    # use a non-rectangular molecule to verify search is restricted to the grid.
+    # use non-rectangular molecule to verify search is restricted to grid.
     q_orig = from_fixture_molblock("mol.mol")
     angle = get_best_fit_angle(q_orig, (2.0, 1.0), angle_step_deg=angle_step_deg)
     assert 0.0 <= angle < 180.0
@@ -320,7 +319,7 @@ def test_get_best_fit_angle_only_returns_grid_angles(angle_step_deg: float, atol
 
 @pytest.mark.parametrize("ratio", ["2:1", "2.5:1", " 2 : 1 "])
 def test_get_alignment_ops_from_molblock_with_bounding_box_ratio(ratio: str, atol: float) -> None:
-    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])  # 2x4 rectangle.
+    mol = _rect_mol([(-1.0, 2.0), (-1.0, -2.0), (1.0, 2.0), (1.0, -2.0)])  # 2x4 rectangle
     molblock = Chem.MolToMolBlock(mol, forceV3000=True)
 
     flips, global_flip, angle = get_alignment_ops_from_molblock(molblock, ratio, atol=atol)

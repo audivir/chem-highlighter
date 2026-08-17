@@ -1,4 +1,4 @@
-"""Highlight R-groups in a molecule."""
+"""Highlight R-groups in molecule."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def validate_data(  # pragma: no cover
         ignore_cols: Sequence of column names to exclude from validation.
 
     Raises:
-        ValueError: If columns are not named in the 'R{n}' format.
+        ValueError: If columns are not named in 'R{n}' format.
     """
     ignore_cols = [] if ignore_cols is None else list(ignore_cols)
 
@@ -106,7 +106,7 @@ def complete_smiles(  # pragma: no cover
 
 
 def create_empty(core: Mol) -> Chem.Mol:
-    """Generate empty core by replacing R-group dummies with Cs and removing empty branches."""
+    """Generate empty core by replacing R-group dummies with carbons and removing empty branches."""
     core_smi = mol_to_smiles(core)
     empty = re.sub(r"\[\*\:\d+\]", "C", core_smi)
     empty = remove_empty_branches(empty)
@@ -119,7 +119,7 @@ def create_empty(core: Mol) -> Chem.Mol:
 def set_neighbor_labels_for_atom(
     lbl: str, mol: Chem.Mol, at: Chem.Atom, source_idx_prop: str = "SourceAtomIdx"
 ) -> None:
-    """Assign isotope labels to neighbors of dummy atom based on its map number."""
+    """Assign isotope labels to neighbors of dummy atom based on map number."""
     if not (
         not at.GetAtomicNum()
         and at.GetAtomMapNum()
@@ -129,7 +129,7 @@ def set_neighbor_labels_for_atom(
         return
 
     at_map_num = at.GetAtomMapNum()
-    # identify atoms connected to the attachment point within the molecule.
+    # identify atoms connected to attachment point within molecule.
     for nbr in at.GetNeighbors():
         if not nbr.HasProp(source_idx_prop):  # pragma: no cover
             continue
@@ -144,8 +144,8 @@ def set_neighbor_labels_for_atom(
 def set_orig_isotope(
     old_idx: int, at: Chem.Atom, source_idx_prop: str = "SourceAtomIdx"
 ) -> tuple[int, int] | None:
-    """Restore original isotope value for an atom based on its source index property."""
-    # restore original isotope values and adjust for atom index shifts caused by hydrogen removal.
+    """Restore original isotope value for atom based on source index property."""
+    # restore original isotope values and adjust for atom index shifts from hydrogen removal.
     if at.HasProp(source_idx_prop):
         if at.HasProp("_OrigIsotope"):  # pragma: no cover
             at.SetIsotope(at.GetIntProp("_OrigIsotope"))
@@ -165,7 +165,7 @@ def get_ring_fill(
     old_new_atom_map: dict[int, int],
     source_idx_prop: str = "SourceAtomIdx",
 ) -> list[int] | None:
-    """Map ring atom indices to their corresponding source indices."""
+    """Map ring atom indices to corresponding source indices."""
     tring: list[int] = []
     all_found = True
     for aid in aring:
@@ -186,7 +186,7 @@ def get_bond_fill(
     old_new_atom_map: dict[int, int],
     source_idx_prop: str = "SourceAtomIdx",
 ) -> int | None:
-    """Retrieve original bond index using source atom properties and the atom mapping."""
+    """Retrieve original bond index using source atom properties and atom mapping."""
     batom = qbnd.GetBeginAtom()
     eatom = qbnd.GetEndAtom()
 
@@ -200,7 +200,7 @@ def get_bond_fill(
 
 
 def get_old_new_atom_map(tmol: Chem.Mol, source_idx_prop: str = "SourceAtomIdx") -> dict[int, int]:
-    """Map original atom indices to their current indices using source atom properties."""
+    """Map original atom indices to current indices using source atom properties."""
     old_new_atom_map: dict[int, int] = {}
     for ix, at in enumerate(get_atoms(tmol)):
         mapping = set_orig_isotope(ix, at, source_idx_prop)
@@ -266,14 +266,14 @@ def highlight_rgroups(  # noqa: PLR0913,PLR0917
     get_colors_func: Callable[[], list[RGBA]] | None = None,
     backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
 ) -> HighlightBackendMoleculeT_co:
-    """Apply visual highlighting to R-group substituents within a molecule."""
+    """Highlight R-group substituents within molecule."""
     from rdkit import Chem
     from rdkit.Chem import rdqueries
 
     mol = Chem.Mol(mol)
     core = Chem.Mol(core)
 
-    # include atom map numbers in the substructure search to improve alignment with symmetric cores.
+    # include atom map numbers in substructure search to improve alignment with symmetric cores.
     for at in get_atoms(core):
         if at_map_num := at.GetAtomMapNum():
             at.ExpandQuery(rdqueries.IsotopeEqualsQueryAtom(200 + at_map_num))
@@ -308,15 +308,15 @@ def draw_single(
     # opts: MolDrawOptions | None = None,  # noqa: ERA001
     backend: type[HighlightBackendMoleculeT_co] = RDKitMolecule,  # type: ignore[assignment]
 ) -> HighlightBackendMoleculeT_co:
-    """Draw single decomposed molecule using highlighting and alignment.
+    """Draw decomposed molecule using highlighting and alignment.
 
     Args:
         decomposed: Decomposed molecule data.
         get_colors_func: Optional function to provide color mapping.
-        backend: Highlighting document backend.
+        backend: Highlighting backend.
 
     Returns:
-        The highlighted document.
+        Highlighted document.
     """
     doc = highlight_rgroups(
         decomposed.groups,
@@ -341,7 +341,7 @@ def draw_multiple(  # pragma: no cover
     get_colors_func: Callable[[], list[RGBA]] | None = None,
     backend: type[HighlightBackendMolecule] = RDKitMolecule,
 ) -> None:
-    """Draw multiple molecule groups in a grid layout."""
+    """Draw multiple molecule groups in grid layout."""
     import imgkit
     import numpy as np
     import pandas as pd
@@ -366,7 +366,7 @@ def draw_multiple(  # pragma: no cover
     )
 
     data = buffer.getvalue()
-    # convert numpy matrix to html table.
+    # convert numpy matrix to HTML table.
     filename = Path(filename)
     if filename.suffix == ".html":
         Path(filename).write_text(data, encoding="utf-8")

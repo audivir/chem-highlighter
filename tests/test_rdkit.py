@@ -1,4 +1,4 @@
-"""Tests for the RDKit backend."""
+"""Tests for RDKit backend."""
 
 from __future__ import annotations
 

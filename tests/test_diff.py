@@ -1,4 +1,4 @@
-"""Tests for the diff module."""
+"""Tests for diff module."""
 
 from __future__ import annotations
 

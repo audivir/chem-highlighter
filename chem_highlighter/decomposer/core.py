@@ -41,7 +41,7 @@ def set_source_idx(mols: Sequence[Chem.Mol]) -> None:
 def decompose(
     core: str | Chem.Mol, data: Sequence[str | Chem.Mol]
 ) -> tuple[Chem.Mol, dict[int, tuple[Chem.Mol, dict[str, Chem.Mol]]]]:
-    """Decompose a set of molecules around common core structure."""
+    """Decompose set of molecules around common core structure."""
     from rdkit import Chem
     from rdkit.Chem import rdRGroupDecomposition
 
@@ -72,7 +72,7 @@ def decompose(
 
 
 def check_legends(n_mols: int, legends: Sequence[str] | None = None) -> list[str | None]:
-    """Align molecule legends with the number of molecules."""
+    """Align molecule legends with number of molecules."""
     return [legend or None for legend in legends] if legends else [None] * n_mols
 
 
@@ -87,7 +87,7 @@ class DecomposedMol:
 
     @property
     def labels(self) -> list[str]:
-        """Return group keys that start with 'R', excluding core key."""
+        """Return group keys starting with 'R', excluding core key."""
         return [k for k in self.groups if k.startswith("R")]
 
     @property
@@ -97,10 +97,10 @@ class DecomposedMol:
 
 
 class DecomposedList:
-    """Container for a validated collection of DecomposedMol objects."""
+    """Container for validated collection of DecomposedMol objects."""
 
     def __init__(self, decomposed_mols: Iterable[DecomposedMol]) -> None:  # pragma: no cover
-        """Initialize and validate the collection of decomposed molecules."""
+        """Initialize and validate collection of decomposed molecules."""
         self._decomposed = list(decomposed_mols)
 
         if not self._decomposed:
@@ -144,7 +144,7 @@ class DecomposedList:
         return iter(self._decomposed)
 
     def build_rdata(self) -> dict[str, list[Chem.Mol]]:
-        """Group molecules by their associated labels."""
+        """Group molecules by associated labels."""
         rdata: dict[str, list[Chem.Mol]] = {key: [] for key in self.labels}
         for x in self:
             for key in self.labels:
@@ -165,10 +165,10 @@ class Core:
         legends: Sequence[str] | None = None,
         skip_cores: Iterable[str] | None = None,
     ) -> tuple[DecomposedList, list[int]]:
-        """Decompose a list of SMILES or molecules into R-groups.
+        """Decompose list of SMILES or molecules into R-groups.
 
         Returns:
-            A tuple containing the decomposed list and indices of non-matching inputs.
+            Tuple containing decomposed list and indices of non-matching inputs.
         """
         final_legends = check_legends(len(data), legends)
 

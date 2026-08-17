@@ -17,7 +17,7 @@ def _make_sdf(smiles_list: list[str]) -> str:
 
 
 def _make_rxn(reactant_smiles: str, product_smiles: str) -> str:
-    """Build minimal $RXN block from single reactant and product."""
+    """Create minimal $RXN block from reactant and product SMILES."""
     from rdkit.Chem import rdChemReactions
 
     rxn = rdChemReactions.ReactionFromSmarts(f"{reactant_smiles}>>{product_smiles}", useSmiles=True)
@@ -47,7 +47,7 @@ def test_from_bytes_sdf_garbage_raises() -> None:
 def test_from_bytes_rxn_reads_reactants_then_agents_then_products() -> None:
     block = _make_rxn("CCO", "CC=O")
     doc = RDKitDocument.from_bytes(block.encode(), "RXN")
-    # mdl rxn files lack a distinct agent section and contain only reactants and products.
+    # MDL RXN files lack distinct agent section and contain only reactants and products.
     assert len(doc) == 2
     smiles = [m.export_string("SMILES") for m in doc.molecules]
     assert smiles == ["CCO", "CC=O"]

@@ -1,4 +1,4 @@
-"""Backend-independent asynchronous test functions mirroring `backend_test.py`."""
+"""Backend-independent asynchronous tests mirroring `backend_test.py`."""
 
 from __future__ import annotations  # noqa: I001,RUF100
 
@@ -30,9 +30,9 @@ async def create_doc(
 
 async def assert_doc_init(backend: type[AsyncHighlightBackendMoleculeT_co]) -> None:
     doc = await create_doc("c1ccccc1", backend)
-    assert await doc.export_string("SMILES") == "C1=CC=CC=C1"  # kekulize on default
-    assert doc.get_hml_json() is None  # non-highlighted
-    assert doc.get_edit_state() == (True, False, False)  # set correct state
+    assert await doc.export_string("SMILES") == "C1=CC=CC=C1"  # kekulize by default.
+    assert doc.get_hml_json() is None  # verify molecule is non-highlighted.
+    assert doc.get_edit_state() == (True, False, False)  # verify initial edit state.
 
 
 async def assert_export_mdl(
@@ -87,7 +87,7 @@ async def assert_from_bytes_unsupported_format(
     backend: type[AsyncHighlightBackendMoleculeT_co],
     sync_backend_name: str,
 ) -> None:
-    # error message references the synchronous backend rather than the async wrapper.
+    # verify error message references synchronous backend instead of async wrapper.
     with pytest.raises(
         InputFormatNotSupported, match=f"{sync_backend_name} does not support importing from {fmt}"
     ):

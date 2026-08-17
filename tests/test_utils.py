@@ -59,7 +59,7 @@ def test_mol_from_smiles_valid(smiles: str, expected_atoms: int, expected_bonds:
     "invalid_smiles",
     [
         "ZZZ",  # invalid element
-        "",  # empty string
+        "",  # verify empty string.
         "invalid",
     ],
 )
@@ -70,14 +70,14 @@ def test_mol_from_smiles_invalid_raises(invalid_smiles: str) -> None:
 
 @pytest.mark.parametrize("smiles", ["CCO", "CCC", "C1=CC=CC=C1", "c1ccccc1", "CC(=O)O"])
 def test_mol_to_smiles(smiles: str) -> None:
-    # round-trip conversion must preserve molecular equivalence.
+    # verify round-trip conversion preserves molecular equivalence.
     mol = mol_from_smiles(smiles)
     result = mol_to_smiles(mol)
     assert_mols_equal(result, smiles)
 
 
 def test_mol_to_smiles_empty_mol_raises() -> None:
-    # empty molecule has no valid SMILES representation.
+    # verify empty molecule raises ValueError.
     empty = Chem.RWMol()
     with pytest.raises(ValueError, match="Empty SMILES"):
         mol_to_smiles(empty)
@@ -87,7 +87,7 @@ def test_mol_to_smiles_empty_mol_raises() -> None:
     ("data", "expected"),
     [
         ("CC(C)", "CC(C)"),  # store string verbatim without canonicalization.
-        (  # store canonical SMILES when given a Mol.
+        (  # verify canonical SMILES are stored when given a Mol.
             Chem.MolFromSmiles("CCC"),
             "CCC",
         ),

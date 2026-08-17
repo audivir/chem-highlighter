@@ -1,4 +1,4 @@
-"""Tests for the `AsyncRDKitMolecule` async backend."""
+"""Tests for `AsyncRDKitMolecule` async backend."""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_to_console() -> None:
 
 
 def test_concurrent_documents_run_in_parallel() -> None:
-    """Verify that multiple documents are processed concurrently via the executor thread pool."""
+    """Verify multiple documents are processed concurrently via executor thread pool."""
 
     async def one(smiles: str) -> str:
         doc = await AsyncRDKitMolecule.from_string(smiles, "SMILES")

@@ -1,4 +1,4 @@
-"""Provide utility functions for the decomposer."""
+"""Utility functions for decomposer."""
 
 from __future__ import annotations
 
@@ -25,14 +25,14 @@ RESET_COLOR = "\033[0m"
 
 
 class SmilesMolPair(NamedTuple):
-    """Container for SMILES string and its corresponding RDKit molecule."""
+    """Container for SMILES string and corresponding RDKit molecule."""
 
     smiles: str
     mol: Chem.Mol
 
 
 def mol_from_smiles(smiles: str) -> Chem.Mol:
-    """Convert SMILES string to RDKit molecule."""
+    """Create RDKit molecule from SMILES string."""
     from rdkit import Chem
 
     mol: Chem.Mol | None = Chem.MolFromSmiles(smiles)
@@ -42,7 +42,7 @@ def mol_from_smiles(smiles: str) -> Chem.Mol:
 
 
 def mol_to_smiles(mol: Chem.Mol) -> str:
-    """Convert RDKit molecule to SMILES string."""
+    """Create SMILES string from RDKit molecule."""
     from rdkit import Chem
 
     try:
@@ -55,7 +55,7 @@ def mol_to_smiles(mol: Chem.Mol) -> str:
 
 
 def get_smiles_mol_pair(data: str | Chem.Mol) -> SmilesMolPair:
-    """Return SMILES string and its corresponding RDKit molecule."""
+    """Return SMILES string and corresponding RDKit molecule."""
     from rdkit import Chem
 
     if isinstance(data, Chem.Mol):
@@ -71,17 +71,17 @@ def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
 
 
 def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
-    """Return atoms of RDKit molecule."""
+    """Return atoms from RDKit molecule."""
     return mol.GetAtoms()  # type: ignore[no-any-return,no-untyped-call]
 
 
 def get_bonds(mol: Chem.Mol) -> tuple[Chem.Bond, ...]:
-    """Return bonds of RDKit molecule."""
+    """Return bonds from RDKit molecule."""
     return mol.GetBonds()  # type: ignore[no-any-return,no-untyped-call]
 
 
 def get_neighbors(atom: Chem.Atom) -> tuple[Chem.Atom, ...]:
-    """Return neighbor atoms of RDKit atom."""
+    """Return neighbor atoms from RDKit atom."""
     return atom.GetNeighbors()
 
 
@@ -126,7 +126,7 @@ def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
             parts[10] = f"{pos.y:.8f}"
             parts[12] = f"{pos.z:.8f}"
 
-            # reconstruct the line.
+            # reconstruct line.
             lines[i] = "".join(parts)
             atom_idx += 1
 
@@ -139,7 +139,7 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     atol: float,
     quiet: bool = False,
 ) -> bool:
-    """Determine if two molecules represent the same conformer."""
+    """Determine if two molecules represent same conformer."""
     import numpy as np
     from rdkit import Chem
     from scipy.optimize import linear_sum_assignment
@@ -165,7 +165,7 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
             raise ValueError("Non-identical molecules")
         return False
 
-    # defensive guard for topology consistency.
+    # ensure topology consistency.
     if (
         mol_a.GetNumAtoms() != mol_b.GetNumAtoms() or mol_a.GetNumBonds() != mol_b.GetNumBonds()
     ):  # pragma: no cover
@@ -179,7 +179,7 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     pos_a = np.array(conf_a.GetPositions())
     pos_b = np.array(conf_b.GetPositions())
 
-    # cost matrix of distances.
+    # distance cost matrix.
     cost_matrix = cdist(pos_a, pos_b)
 
     # penalize chemically incompatible atom pairs to prevent incorrect spatial assignments.
@@ -192,7 +192,9 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     # find minimum-cost one-to-one assignment.
     rows, cols = linear_sum_assignment(cost_matrix)
 
-    mapping = {int(c): int(r) for c, r in zip(cols, rows, strict=True)}  # expected vs actual.
+    mapping = {
+        int(c): int(r) for c, r in zip(cols, rows, strict=True)
+    }  # compare expected and actual values.
 
     max_dist = max(cost_matrix[rows, cols])
     if max_dist >= atol:
@@ -200,7 +202,7 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
             logger.error("Positions off by %e", max_dist)
         return False
 
-    # defensive guard against unexpected assignment failures.
+    # prevent unexpected assignment failures.
     for exp_idx, act_idx in mapping.items():
         atom_a = mol_a.GetAtomWithIdx(act_idx)
         atom_b = mol_b.GetAtomWithIdx(exp_idx)
@@ -214,7 +216,7 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
         a1 = mapping[bond.GetBeginAtomIdx()]
         a2 = mapping[bond.GetEndAtomIdx()]
 
-        # defensive guard against missing isomorphic mappings.
+        # prevent missing isomorphic mappings.
         other: Chem.Bond | None = mol_a.GetBondBetweenAtoms(a1, a2)
         if not other:  # pragma: no cover
             if not quiet:  # pragma: no branch
@@ -239,7 +241,7 @@ def get_mol_center(mol_or_conf: Chem.Mol | Chem.Conformer) -> NDArray[np.float64
 
 
 def move_molecule(mol_or_conf: Chem.Mol | Chem.Conformer, offset: NDArray[np.float64]) -> None:
-    """Translate all atom positions of molecule or conformer by the given offset."""
+    """Translate atom positions of molecule or conformer by offset."""
     from rdkit import Chem
 
     if offset.shape != (3,):  # pragma: no cover
@@ -271,7 +273,7 @@ def recenter_mol(
 
 
 def flatten_conformer_z(mol: Chem.Mol, conf: Chem.Conformer, atol: float) -> None:
-    """Set all atom Z-coordinates in the conformer to 0.0."""
+    """Set atom Z-coordinates in conformer to 0.0."""
     from rdkit.Geometry import Point3D
 
     for ix in range(mol.GetNumAtoms()):
@@ -282,7 +284,7 @@ def flatten_conformer_z(mol: Chem.Mol, conf: Chem.Conformer, atol: float) -> Non
 
 
 def raise_if_3d_molecule(conf: Chem.Conformer, atol: float) -> None:
-    """Raise ValueError if the conformer contains non-zero Z-coordinates."""
+    """Raise ValueError if conformer contains non-zero Z-coordinates."""
     import numpy as np
 
     if not np.isclose(conf.GetPositions()[:, 2], 0.0, atol=atol).all():
@@ -290,7 +292,7 @@ def raise_if_3d_molecule(conf: Chem.Conformer, atol: float) -> None:
 
 
 def are_atoms_equal(atom_a: Chem.Atom, atom_b: Chem.Atom) -> bool:
-    """Determine if two atoms have the same atomic number, aromaticity, and charge."""
+    """Compare atomic number, aromaticity, and charge of two atoms."""
     return (
         atom_a.GetAtomicNum() == atom_b.GetAtomicNum()
         and atom_a.GetIsAromatic() == atom_b.GetIsAromatic()
@@ -299,7 +301,7 @@ def are_atoms_equal(atom_a: Chem.Atom, atom_b: Chem.Atom) -> bool:
 
 
 def are_bonds_equal(bond_a: Chem.Bond, bond_b: Chem.Bond) -> bool:
-    """Determine if two bonds have the same bond type and aromaticity."""
+    """Compare bond type and aromaticity of two bonds."""
     return (
         bond_a.GetBondType() == bond_b.GetBondType()
         and bond_a.GetIsAromatic() == bond_b.GetIsAromatic()
@@ -307,7 +309,7 @@ def are_bonds_equal(bond_a: Chem.Bond, bond_b: Chem.Bond) -> bool:
 
 
 def setup_cmap() -> list[RGBA]:  # pragma: no cover
-    """Initialize the colormap."""
+    """Initialize colormap."""
     int_colors: list[tuple[int, int, int]] = [
         (86, 180, 233),
         (240, 228, 66),
@@ -331,7 +333,7 @@ def get_ansi_color(palette: Sequence[str], group_ix: int) -> str:
 
 
 def get_float_env(name: str) -> float | None:
-    """Retrieve float value from environment variable."""
+    """Retrieve float from environment variable."""
     value = os.environ.get(name)
     if value is None:
         return None

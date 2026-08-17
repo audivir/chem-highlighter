@@ -1,4 +1,4 @@
-"""Tests for the modify module."""
+"""Test modify module."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Configuration for chem-highlighter tests."""
+"""Test configuration for chem-highlighter."""
 
 from __future__ import annotations
 

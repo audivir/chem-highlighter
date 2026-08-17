@@ -69,12 +69,8 @@ def create_doc(
 def assert_doc_init(backend: type[HighlightBackendMoleculeT_co]) -> None:
     doc = create_doc("c1ccccc1", backend)
     assert doc.export_string("SMILES") == "C1=CC=CC=C1"  # verify default kekulization.
-    assert doc.get_hml_json() is None  # verify no highlighting is applied.
-    assert doc.get_edit_state() == (
-        True,
-        False,
-        False,
-    )  # verify edit state is correctly initialized.
+    assert doc.get_hml_json() is None  # verify that no highlighting is applied.
+    assert doc.get_edit_state() == (True, False, False)  # verify edit state initialization.
 
 
 def assert_export_mdl(
@@ -139,7 +135,7 @@ def assert_export_png_respects_environment(
     transparent: bool,
     backend: type[HighlightBackendMoleculeT_co],
 ) -> None:
-    """Verify that PNG renderer respects width, height, and transparency environment variables."""
+    """Verify PNG renderer respects width, height, and transparency environment variables."""
     with set_env(
         CHEM_HIGHLIGHTER_PNG_WIDTH="137",
         CHEM_HIGHLIGHTER_PNG_HEIGHT="141",
@@ -195,7 +191,7 @@ def assert_from_bytes(
 
     assert doc.export_string("SMILES") == "C1=CC=CC=C1"
 
-    # verify handling of empty input.
+    # verify empty input handling.
     with pytest.raises((ValueError, RuntimeError), match=f"Invalid {fmt} input"):
         backend.from_bytes(b"", fmt)
 
@@ -282,7 +278,7 @@ def assert_hide_hydrogens_special(
     doc = backend.from_mol(mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc.hide_hydrogens_callback()
     mol = RDKitMolecule.from_molblock(doc.to_molblock()).mol
-    assert mol.GetNumAtoms() == 3  # verify only carbon atoms and deuterium are retained.
+    assert mol.GetNumAtoms() == 3  # verify that only carbon atoms and deuterium are retained.
 
     rdkit_doc = RDKitMolecule.from_mol(mol_from_explicit_smiles("[H]C([2H])C[H]"))
     doc = backend.from_molblock(rdkit_doc.to_molblock())
@@ -290,7 +286,7 @@ def assert_hide_hydrogens_special(
     mol = RDKitMolecule.from_molblock(doc.to_molblock()).mol
     assert (
         mol.GetNumAtoms() == 4
-    )  # verify carbon atoms, deuterium, and highlighted hydrogen are retained.
+    )  # verify that carbon atoms, deuterium, and highlighted hydrogen are retained.
 
 
 def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendMoleculeT_co]) -> None:
@@ -303,7 +299,7 @@ def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendMole
     mol = RDKitMolecule.from_molblock(doc.to_molblock()).mol
     assert (
         mol.GetNumAtoms() == 5
-    )  # verify carbon atoms, deuterium, oxygen, and highlighted hydrogen are retained.
+    )  # verify carbon atoms, deuterium, oxygen, and highlighted hydrogen retained.
     assert "<svg" in svg
     assert svg != before, "highlighting should change the rendered SVG"
     assert "ff0000" in svg.lower(), "the highlight color should actually appear in the SVG"
@@ -315,7 +311,7 @@ def assert_highlight_from_json(hml_json: str, backend: type[HighlightBackendMole
     mol = RDKitMolecule.from_molblock(doc.to_molblock()).mol
     assert (
         mol.GetNumAtoms() == 5
-    )  # verify carbon atoms, deuterium, oxygen, and highlighted hydrogen are retained.
+    )  # verify carbon atoms, deuterium, oxygen, and highlighted hydrogen retained.
     assert svg == svg_with_hidden
 
     doc = create_doc("[H]CCO[2H]", backend)

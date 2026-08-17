@@ -1,4 +1,4 @@
-"""Tests for the highlight module."""
+"""Tests for highlight module."""
 
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ def test_remove_empty_branches(smiles: str, expected: str) -> None:
         (
             "C([*:1])([*:2])O",
             4,
-        ),  # verify that replacing two R-groups with carbon results in 4 heavy atoms.
-        ("C[*:1]", 2),  # verify that replacing one R-group with carbon results in 2 heavy atoms.
+        ),  # verify replacing two R-groups with carbon results in 4 heavy atoms.
+        ("C[*:1]", 2),  # verify replacing one R-group with carbon results in 2 heavy atoms.
     ],
 )
 def test_create_empty(core_smiles: str, expected_atoms: int) -> None:

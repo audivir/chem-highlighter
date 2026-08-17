@@ -44,7 +44,7 @@ def _mol_from_molblock(molblock: str) -> Chem.Mol:
     """Parse mol block into sanitized RDKit molecule.
 
     Raises:
-        ValueError: If the molblock is invalid.
+        ValueError: If molblock is invalid.
     """
     from rdkit import Chem
 
@@ -112,7 +112,7 @@ def highlight_rings(
     # set molecule scale.
     highlight_without_rings(drawer, hml, mol)
     drawer.ClearDrawing()
-    # verify drawing is clear to prevent duplicate rendering.
+    # prevent duplicate rendering.
     conf = mol.GetConformer()
     for ring_ix, group_ix in hml.highlighted_rings.items():
         color = hml.palette[group_ix]
@@ -128,7 +128,7 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
     fill_rings: bool = True,
     opts: Draw.MolDrawOptions | None = None,
 ) -> bytes:
-    """Draw molecule using specified highlighting options and output format."""
+    """Draw molecule with specified highlighting and output format."""
     from rdkit.Chem import Draw
     from rdkit_svg.draw import get_rdkit_svg
     from rdkit_svg.utils import assure_elem, hide_objects, read_tree, remove_whitespace, to_string
@@ -153,7 +153,7 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
         if auto_fit:
             # maintain ACS1996 style by rendering SVG to PNG to preserve aspect ratio.
 
-            # auto-fit and center molecule when canvas size is configured to match resvg behavior.
+            # center and auto-fit molecule to match resvg behavior.
             opts.prepareMolsBeforeDrawing = True  # type: ignore[assignment]
         else:
             mean_bond_length = Draw.MeanBondLength(mol) or 1.0
@@ -214,7 +214,7 @@ def export_rdkit_molecule(mol_backend: RDKitMolecule, fmt: OutputFormat, use_v20
         return draw_mol(hml, mol_backend.mol, "svg", mol_backend._label)  # noqa: SLF001
     if fmt == "PNG":
         return draw_mol(hml, mol_backend.mol, "png", mol_backend._label)  # noqa: SLF001
-    # rxn, cdx, cdxml, eps
+    # RXN, CDX, CDXML, EPS
     name = type(mol_backend).__name__
     raise OutputFormatNotSupported(f"{name} does not support exporting to {fmt}")
 
@@ -273,7 +273,7 @@ class RDKitMolecule(HighlightBackendMolecule):
     @override
     @classmethod
     def from_bytes(cls, data: bytes, fmt: InputFormat) -> Self:
-        """Initialize document from byte data."""
+        """Create document from byte data."""
         from rdkit import Chem
 
         mol: Chem.Mol | None = None
@@ -300,7 +300,7 @@ class RDKitMolecule(HighlightBackendMolecule):
             inchi_mol: Chem.Mol | None = Chem.MolFromInchi(data.decode(), removeHs=False)  # type: ignore[no-untyped-call]
             mol = inchi_mol
         else:
-            # rxn, cdx.
+            # RXN, CDX.
             raise InputFormatNotSupported(f"{cls.__name__} does not support importing from {fmt}")
         if not mol or mol.GetNumAtoms() < 1:
             raise ValueError(f"Invalid {fmt} input")
@@ -334,7 +334,7 @@ class RDKitMolecule(HighlightBackendMolecule):
 
     @override
     def cleanup_callback(self) -> None:
-        """Sanitize molecule and recalculate 2D coordinates."""
+        """Sanitize molecule and compute 2D coordinates."""
         from rdkit import Chem
         from rdkit.Chem.rdDepictor import Compute2DCoords
         from rdkit.Chem.rdmolops import SanitizeMol
@@ -383,7 +383,7 @@ class RDKitMolecule(HighlightBackendMolecule):
 
 
 class RDKitDocument(Document[RDKitMolecule]):
-    """Container for molecules parsed via RDKit backend."""
+    """Container for molecules parsed using RDKit."""
 
     @classmethod
     @override
@@ -415,7 +415,7 @@ class RDKitDocument(Document[RDKitMolecule]):
                 else []
             )
         else:
-            # reuse single-molecule backend construction and restrictions for mol, cdx, and inchi.
+            # reuse single-molecule backend construction and restrictions for MOL, CDX, and InChI.
             return [RDKitMolecule.from_bytes(data, fmt)]
 
         valid_mols = [mol for mol in mols if mol is not None and mol.GetNumAtoms() >= 1]
@@ -444,16 +444,16 @@ class RDKitDocument(Document[RDKitMolecule]):
             combined = mol if combined is None else Chem.CombineMols(combined, mol)
         if combined is None:  # pragma: no cover -- `molecules` is never empty, see `__init__`
             raise ValueError("Document requires at least one molecule")
-        # perform ring perception to enable correct rendering of combined molecules.
+        # perform ring perception for correct rendering.
         Chem.GetSSSR(combined)
         return combined
 
 
 class AsyncRDKitMolecule(AsyncHighlightBackendMolecule):
-    """RDKit backend executing calls in thread pool to avoid blocking event loop."""
+    """RDKit backend that executes calls in a thread pool to avoid blocking event loop."""
 
     def __init__(self, sync: RDKitMolecule) -> None:
-        """Wrap synchronous RDKitMolecule."""
+        """Wrap synchronous RDKit molecule."""
         self._sync = sync
 
     @override
@@ -537,7 +537,7 @@ class AsyncRDKitMolecule(AsyncHighlightBackendMolecule):
 
 
 class AsyncRDKitDocument(AsyncDocument[AsyncRDKitMolecule]):
-    """RDKit backend for `AsyncDocument` delegating logic to `RDKitDocument` via thread pool."""
+    """RDKit backend for `AsyncDocument` that delegates logic to `RDKitDocument` via thread pool."""
 
     @classmethod
     @override

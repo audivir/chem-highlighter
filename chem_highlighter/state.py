@@ -41,10 +41,10 @@ class AtomState(msgspec.Struct):
 
     @classmethod
     def freeze(cls, mol: Chem.Mol) -> str:
-        """Store each atom's state as property on the molecule.
+        """Store each atom state as property on molecule.
 
         Returns:
-            The unique property tag used for storage.
+            Unique property tag used for storage.
         """
         tag = f"state_{uuid.uuid4()}"
         for atom in get_atoms(mol):
@@ -56,11 +56,11 @@ class AtomState(msgspec.Struct):
     def unfreeze(cls: type[Self], mol: Chem.Mol, tag: str) -> Chem.Mol:  # type: ignore[redundant-self]
         """Restore atom states and remove atoms added after freezing.
 
-        Removes the specified tag from atoms and restores their stored state. Atoms
-        lacking the tag are removed from the molecule.
+        Removes specified tag from atoms and restores stored state. Atoms lacking tag are
+        removed from molecule.
 
         Returns:
-            The reset molecule.
+            Reset molecule.
         """
         from rdkit import Chem
 

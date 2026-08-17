@@ -1,4 +1,4 @@
-"""Tests for the rejoin module."""
+"""Tests for rejoin module."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from chem_highlighter.utils import mol_from_smiles
     ("smiles", "atom_idx", "error_fragment"),
     [
         ("C", 0, "has 0 neighbors"),  # methane: no heavy-atom neighbors.
-        ("CCC", 1, "has 2 neighbors"),  # propane center C: two neighbors.
+        ("CCC", 1, "has 2 neighbors"),  # propane center carbon has two neighbors.
     ],
 )
 def test_get_sole_neighbor_raises_when_not_exactly_one(
@@ -71,7 +71,7 @@ def test_get_mapped_atoms_double() -> None:
 
 
 def test_mask_hydrogens_raises_when_symbol_already_present() -> None:
-    # [H][*:1]I contains iodine; "I" cannot be used as the mask.
+    # verify "I" cannot be used as mask when iodine is already present in molecule.
     to_mask = mol_from_smiles("[H][*:1]I")
     with pytest.raises(ValueError, match="Mask symbol already in the molecule"):
         mask_hydrogens(to_mask, on=1, symbol="I")
@@ -81,7 +81,7 @@ def test_mask_hydrogens_raises_when_symbol_already_present() -> None:
     ("smiles", "expected"),
     [
         ("[H][*:1]", "[400I][*:1]"),  # replace hydrogens.
-        (  # ensure idempotent masking.
+        (  # verify idempotent masking.
             "[400I][*:1]",
             "[400I][*:1]",
         ),
@@ -94,7 +94,7 @@ def test_mask_hydrogens(smiles: str, expected: str) -> None:
 
 
 def test_clear_special_isotopes_removes_200_and_400_tags() -> None:
-    # remove internal markers with isotopes >= 200.
+    # verify internal markers with isotopes >= 200 are removed.
     mol = mol_from_smiles("IC([200I])([400I])")
     cleared = clear_special_isotopes(mol)
     assert_mols_equal(cleared, "IC(I)(I)")
@@ -104,7 +104,7 @@ def test_clear_special_isotopes_removes_200_and_400_tags() -> None:
     ("smi_a", "smi_b", "on", "bond_order", "expected"),
     [
         ("CC[*:1]", "CO[*:1]", 1, None, "CCOC"),  # default to single bond.
-        ("CC[*:1]", "OC[*:1]", 1, Chem.BondType.DOUBLE, "CC=CO"),  # use explicit double bond.
+        ("CC[*:1]", "OC[*:1]", 1, Chem.BondType.DOUBLE, "CC=CO"),  # verify explicit double bond.
     ],
 )
 def test_join_mols(

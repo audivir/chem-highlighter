@@ -1,4 +1,4 @@
-"""Map SMILES tokens to corresponding RDKit indices."""
+"""Map SMILES tokens to RDKit indices."""
 
 # ruff: noqa: S105
 from __future__ import annotations
@@ -25,7 +25,7 @@ def map_smiles_tokens(  # noqa: PLR0915
 ) -> list[SmilesTokenMap]:
     """Map SMILES tokens to structural roles and RDKit indices.
 
-    Requires `smiles` to be generated with `allBondsExplicit=True`.
+    Requires `smiles` generated with `allBondsExplicit=True`.
     """
     all_props = mol.GetPropsAsDict(includePrivate=True, includeComputed=True)
     atom_order: list[int] = list(all_props["_smilesAtomOutputOrder"])
@@ -52,8 +52,8 @@ def map_smiles_tokens(  # noqa: PLR0915
             orig_atom_ix = atom_order[atom_ix]
             current_atom_index = orig_atom_ix
 
-            # TODO(tihoph): ensure multi-character tokens (e.g., [nH], Cl) are handled as
-            # single units to avoid downstream failure.
+            # TODO(tihoph): ensure multi-character tokens (e.g., [nH], Cl)
+            # are handled as single units.
             token_maps.append(SmilesTokenMap(token_chars, "atom", "atom", orig_atom_ix))
 
             atom_ix += 1
@@ -70,7 +70,7 @@ def map_smiles_tokens(  # noqa: PLR0915
 
         # handle branches.
         elif token == "(":
-            # map branch opening to the first atom inside the branch.
+            # map branch opening to first atom inside branch.
             branch_head_atom = atom_order[atom_ix]
             token_maps.append(SmilesTokenMap(token, "par", "atom", branch_head_atom))
 
@@ -79,7 +79,7 @@ def map_smiles_tokens(  # noqa: PLR0915
             ix += 1
 
         elif token == ")":
-            # map branch closing to the last atom inside the branch.
+            # map branch closing to last atom inside branch.
             token_maps.append(SmilesTokenMap(token, "par", "atom", current_atom_index))
 
             # pop stack to revert main chain to parent atom.

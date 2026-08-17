@@ -39,7 +39,7 @@ def get_2d_mol(mol: Chem.Mol, atol: float) -> Chem.Mol:
     """Validate that molecule has usable 2D conformer.
 
     Raises:
-        ValueError: If the molecule lacks coordinates or is 3D.
+        ValueError: If molecule lacks coordinates or is 3D.
     """
     try:
         conf = mol.GetConformer()
@@ -54,7 +54,7 @@ def _parse_molblock(molblock: str) -> Chem.Mol:
     """Parse mol block into RDKit molecule.
 
     Raises:
-        ValueError: If the mol block is invalid.
+        ValueError: If mol block is invalid.
     """
     from rdkit import Chem
 
@@ -68,7 +68,7 @@ def find_mcs(query: Chem.Mol, reference: Chem.Mol) -> dict[int, int]:
     """Find maximum common substructure between two molecules.
 
     Returns:
-        Mapping of atom indices from the query molecule to the reference molecule.
+        Mapping of atom indices from query molecule to reference molecule.
 
     Raises:
         ValueError: If no common substructure is found.
@@ -104,7 +104,7 @@ def flip_misaligned_bonds(
     """Flip misaligned rotatable bonds based on MCS match.
 
     Returns:
-        List of tuples containing the bond index and anchor atom index for each flip.
+        List of tuples containing bond index and anchor atom index for each flip.
     """
     from rdkit.Chem import rdMolTransforms
 
@@ -122,14 +122,14 @@ def flip_misaligned_bonds(
     for bond_atoms in rot_bonds_ref:
         idx_b, idx_c = bond_atoms
 
-        # both atoms must be in MCS match.
+        # ensure both atoms are in MCS match.
         if idx_b not in mcs_match_rev or idx_c not in mcs_match_rev:  # pragma: no cover
             continue
 
         atom_b = reference.GetAtomWithIdx(idx_b)
         atom_c = reference.GetAtomWithIdx(idx_c)
 
-        # find neighbors in mcs match.
+        # find neighbors in MCS match.
         neighbors_b = [
             n.GetIdx()
             for n in get_neighbors(atom_b)
@@ -141,7 +141,7 @@ def flip_misaligned_bonds(
             if n.GetIdx() != idx_b and n.GetIdx() in mcs_match_rev
         ]
 
-        # both neighbors must be in mcs match.
+        # ensure both neighbors are in MCS match.
         if not neighbors_b or not neighbors_c:  # pragma: no cover
             continue
 
@@ -161,7 +161,7 @@ def flip_misaligned_bonds(
             diff = 360.0 - diff
 
         if diff > 90.0:  # noqa: PLR2004
-            # measure displacement relative to bond atoms to avoid bias from global translation.
+            # measure displacement relative to bond atoms to avoid global translation bias.
             vec_a_q = get_atom_position(conf_q, q_idx_a) - get_atom_position(conf_q, q_idx_b)
             vec_a_r = get_atom_position(conf_r, idx_a) - get_atom_position(conf_r, idx_b)
             dist_a = vec_a_q.Distance(vec_a_r)
@@ -194,11 +194,10 @@ def flip_misaligned_bonds(
 def get_alignment_flips_and_transform(
     query: Chem.Mol, reference: Chem.Mol, atol: float
 ) -> tuple[list[tuple[int, int]], NDArray[np.float64]]:
-    """Compute bond flips and transformation matrix required to align two molecules.
+    """Compute bond flips and transformation matrix to align two molecules.
 
     Returns:
-        A tuple containing a list of bond flips (bond index and anchor atom index)
-        and the 4x4 transformation matrix for the query molecule.
+        Tuple of bond flips (bond index and anchor atom index) and 4x4 transformation matrix.
     """
     import numpy as np
     from rdkit import Chem
@@ -207,7 +206,7 @@ def get_alignment_flips_and_transform(
     from chem_highlighter.utils import is_same_conformer
 
     # short-circuit if molecules are already aligned to avoid symmetry-equivalent non-identity
-    # transforms from the Kabsch algorithm.
+    # transforms from Kabsch algorithm.
     if is_same_conformer(query, reference, atol=atol, quiet=True):
         return [], np.eye(4)
 
@@ -250,10 +249,10 @@ def parse_possible_ratio(reference: str) -> tuple[float, float] | None:
     """Parse bounding box aspect ratio string (e.g., "2:1").
 
     Returns:
-        A tuple of width and height, or None if the reference is not a ratio.
+        Tuple of width and height, or None if reference is not a ratio.
 
     Raises:
-        ValueError: If the ratio contains non-positive values.
+        ValueError: If ratio contains non-positive values.
     """
     match = RATIO_PATTERN.fullmatch(reference.strip())
     if not match:
@@ -268,7 +267,7 @@ def parse_possible_ratio(reference: str) -> tuple[float, float] | None:
 def get_best_fit_angle(
     mol: Chem.Mol, ratio: tuple[float, float], angle_step_deg: float = BOND_ANGLE_STEP_DEG
 ) -> float:
-    """Compute rotation angle that best fits molecule's 2D bounding box to target ratio."""
+    """Compute rotation angle that best fits molecule 2D bounding box to target ratio."""
     import numpy as np
 
     positions = mol.GetConformer().GetPositions()[:, :2]
@@ -293,12 +292,11 @@ def get_alignment_ops_from_molblock(
 ) -> tuple[list[tuple[int, int]], bool, float]:
     """Compute flips and rotation angle required to align molecule to reference.
 
-    The reference may be a molblock or a bounding box aspect ratio (e.g., "2:1").
+    Reference may be molblock or bounding box aspect ratio (e.g., "2:1").
 
     Returns:
-        A tuple containing a list of bond flips (bond index and anchor atom index),
-        a boolean indicating if a global horizontal flip is required, and the
-        rotation angle in degrees.
+        Tuple of bond flips (bond index and anchor atom index), boolean indicating
+        global horizontal flip, and rotation angle in degrees.
     """
     query = get_2d_mol(_parse_molblock(query_molblock), atol=atol)
 

@@ -59,7 +59,7 @@ class ColumnDef(TypedDict):
 
 
 class GridOptions(TypedDict):
-    """Container for AG Grid grid definitions."""
+    """Container for AG Grid definitions."""
 
     rowData: list[dict[str, Any]]
     columnDefs: list[ColumnDef]
@@ -69,7 +69,7 @@ class GridOptions(TypedDict):
 
 
 class TextFilterModel(TypedDict):
-    """Container for AG Grid simple text column filter models."""
+    """Container for AG Grid text column filter models."""
 
     filterType: NotRequired[Literal["text"]]
     type: NotRequired[
@@ -90,7 +90,7 @@ class TextFilterModel(TypedDict):
 
 
 class NumberFilterModel(TypedDict):
-    """Container for AG Grid simple number column filter models."""
+    """Container for AG Grid number column filter models."""
 
     filterType: NotRequired[Literal["number"]]
     type: NotRequired[
@@ -112,7 +112,7 @@ class NumberFilterModel(TypedDict):
 
 
 class DateFilterModel(TypedDict):
-    """Container for AG Grid simple date column filter models."""
+    """Container for AG Grid date column filter models."""
 
     filterType: NotRequired[Literal["date"]]
     type: NotRequired[
@@ -163,7 +163,7 @@ def polars_to_aggrid(
     Args:
         df: Input DataFrame.
         svg_cols: Columns to render as embedded SVG images.
-        pinned_rows: Number of rows to pin at the top.
+        pinned_rows: Number of rows to pin at top.
         preset_filter: AG Grid filter model to apply on load.
     """
     has_svg = False
@@ -318,14 +318,14 @@ def create_visualization_table(  # noqa: PLR0913,PLR0917
     Args:
         df: Input DataFrame.
         vis_mol_col: Column name containing RDKit molecule objects.
-        reference: Reference molecule for alignment, provided as an index or RDKit molecule.
-        clean_reference: Whether to clean the reference molecule before alignment.
+        reference: Reference molecule for alignment, provided as index or RDKit molecule.
+        clean_reference: Whether to clean reference molecule before alignment.
         backend: Backend used to generate SVG depictions.
-        pinned_rows: Number of rows to pin at the top.
+        pinned_rows: Number of rows to pin at top.
         preset_filter: AG Grid filter model to apply on load.
 
     Returns:
-        Standalone HTML document containing the interactive AG Grid table.
+        Standalone HTML document containing interactive AG Grid table.
     """
     import polars as pl
     from rdkit import Chem
