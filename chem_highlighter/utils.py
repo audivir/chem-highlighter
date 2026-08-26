@@ -72,12 +72,12 @@ def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
 
 def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
     """Return atoms from RDKit molecule."""
-    return mol.GetAtoms()  # type: ignore[no-any-return,no-untyped-call]
+    return tuple(mol.GetAtoms())
 
 
 def get_bonds(mol: Chem.Mol) -> tuple[Chem.Bond, ...]:
     """Return bonds from RDKit molecule."""
-    return mol.GetBonds()  # type: ignore[no-any-return,no-untyped-call]
+    return tuple(mol.GetBonds())
 
 
 def get_neighbors(atom: Chem.Atom) -> tuple[Chem.Atom, ...]:

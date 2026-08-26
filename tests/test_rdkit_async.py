@@ -9,6 +9,7 @@ import pytest
 from async_backend_test import (
     assert_add_label,
     assert_align_to_reference,
+    assert_align_to_reference_ratio,
     assert_cleanup,
     assert_doc_init,
     assert_export,
@@ -67,6 +68,10 @@ def test_align_to_reference(r_file: str, q_file_suffixes: Sequence[str], atol: f
     asyncio.run(assert_align_to_reference(r_file, q_file_suffixes, atol, AsyncRDKitMolecule))
 
 
+def test_align_to_reference_ratio(atol: float) -> None:
+    asyncio.run(assert_align_to_reference_ratio(atol, AsyncRDKitMolecule))
+
+
 def test_cleanup(atol: float) -> None:
     async def run() -> None:
         doc = await AsyncRDKitMolecule.from_string("c1cnccc1", "SMILES")
@@ -95,6 +100,14 @@ def test_add_label() -> None:
 
 def test_to_console() -> None:
     asyncio.run(assert_to_console(AsyncRDKitMolecule))
+
+
+def test_to_png() -> None:
+    async def run() -> None:
+        doc = await AsyncRDKitMolecule.from_string("c1ccccc1", "SMILES")
+        assert (await doc.to_png())[:4] == b"\x89PNG"
+
+    asyncio.run(run())
 
 
 def test_concurrent_documents_run_in_parallel() -> None:

@@ -40,7 +40,7 @@ Drawer: TypeAlias = "Draw.MolDraw2DCairo | Draw.MolDraw2DSVG"
 SENTINEL_ISOTOPE = 999
 
 
-def _mol_from_molblock(molblock: str) -> Chem.Mol:
+def mol_from_molblock(molblock: str) -> Chem.Mol:
     """Parse mol block into sanitized RDKit molecule.
 
     Raises:
@@ -173,7 +173,8 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
     if isinstance(drawer, Draw.MolDraw2DSVG):
         svg = get_rdkit_svg(drawer)
         tree = read_tree(svg)
-        if not assure_elem(tree):
+        if not assure_elem(tree):  # pragma: no cover
+            # defensive: RDKit-generated SVG always parses to a root element.
             raise ValueError("No root element found")
         hide_objects(tree, ["rect"])
         if not legend:
@@ -315,7 +316,7 @@ class RDKitMolecule(HighlightBackendMolecule):
     def align_to_reference_ratio_callback(self, width: float, height: float) -> None:
         """Align molecule to specified bounding box ratio."""
         atol = 1e-5
-        query = get_2d_mol(_mol_from_molblock(self.to_molblock()), atol=atol)
+        query = get_2d_mol(mol_from_molblock(self.to_molblock()), atol=atol)
         angle = get_best_fit_angle(query, (width, height))
         self.mol = apply_transform(query, angle, flip_horizontal=False, atol=atol)
 
@@ -323,8 +324,8 @@ class RDKitMolecule(HighlightBackendMolecule):
     def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
         """Align molecule to reference molblock."""
         atol = 1e-5
-        query = get_2d_mol(_mol_from_molblock(self.to_molblock()), atol=atol)
-        reference = get_2d_mol(_mol_from_molblock(reference_molblock), atol=atol)
+        query = get_2d_mol(mol_from_molblock(self.to_molblock()), atol=atol)
+        reference = get_2d_mol(mol_from_molblock(reference_molblock), atol=atol)
         flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
         global_flip, angle = parse_transform(transform, atol=atol)
         for bond_ix, anchor_atom_ix in flips:

@@ -10,6 +10,7 @@ from backend_test import (
     HIDE_HYDROGENS,
     assert_add_label,
     assert_align_to_reference,
+    assert_align_to_reference_ratio,
     assert_cleanup,
     assert_doc_init,
     assert_export,
@@ -28,7 +29,7 @@ from backend_test import (
     assert_to_console,
 )
 
-from chem_highlighter.backend.rdkit import RDKitMolecule
+from chem_highlighter.backend.rdkit import RDKitMolecule, mol_from_molblock
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -88,6 +89,15 @@ def test_from_bytes_unsupported_format(fmt: Literal["RXN", "CDX"]) -> None:
 @pytest.mark.parametrize(("r_file", "q_file_suffixes"), ALIGNMENTS)
 def test_align_to_reference(r_file: str, q_file_suffixes: Sequence[str], atol: float) -> None:
     assert_align_to_reference(r_file, q_file_suffixes, atol, RDKitMolecule)
+
+
+def test_align_to_reference_ratio(atol: float) -> None:
+    assert_align_to_reference_ratio(atol, RDKitMolecule)
+
+
+def test_mol_from_molblock_invalid_raises() -> None:
+    with pytest.raises(ValueError, match="Invalid molblock"):
+        mol_from_molblock("not a molblock")
 
 
 def test_cleanup(atol: float) -> None:

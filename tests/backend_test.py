@@ -76,7 +76,8 @@ def assert_doc_init(backend: type[HighlightBackendMoleculeT_co]) -> None:
 def assert_export_mdl(
     fmt: Literal["SDF", "Mol", "RXN"], use_v2000: bool, backend: type[HighlightBackendMoleculeT_co]
 ) -> None:
-    if fmt == "RXN":
+    if fmt == "RXN":  # pragma: no cover
+        # no current backend supports RXN export via the mdl path (see the unsupported-format test)
         raise NotImplementedError
     doc = create_doc("c1ccccc1", backend)
     expected = "C1=CC=CC=C1"
@@ -127,7 +128,8 @@ def assert_export_images(
         width, height = png_dimensions(output)
         assert width > 0
         assert height > 0
-    elif fmt == "EPS":
+    elif fmt == "EPS":  # pragma: no cover
+        # no current backend supports EPS export (see assert_export_unsupported_format).
         assert b"EPSF-1.2" in output
 
 
@@ -158,9 +160,11 @@ def assert_export(
     output = create_doc("c1ccccc1", backend).export(fmt)
     if fmt == "SMILES":
         assert output == b"C1=CC=CC=C1"
-    elif fmt == "CDX":
+    elif fmt == "CDX":  # pragma: no cover
+        # no current backend supports CDX export (see assert_export_unsupported_format).
         assert output.startswith(b"VjCD")
-    elif fmt == "CDXML":
+    elif fmt == "CDXML":  # pragma: no cover
+        # no current backend supports CDXML export (see assert_export_unsupported_format).
         assert b"</CDXML>" in output
     elif fmt == "InChI":
         assert output == b"InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H"
@@ -184,7 +188,8 @@ def assert_from_bytes(
     fmt: InputFormat,
     backend: type[HighlightBackendMoleculeT_co],
 ) -> None:
-    if fmt == "RXN":
+    if fmt == "RXN":  # pragma: no cover
+        # no current backend supports RXN import (see assert_from_bytes_unsupported_format).
         raise NotImplementedError
     exported = backend.from_string("c1ccccc1", "SMILES").export(fmt)
     doc = backend.from_bytes(exported, fmt)
@@ -234,6 +239,23 @@ def assert_align_to_reference(
             ref = backend.from_mol(ref_mol)
             doc.align_to_reference(ref.to_molblock())
             assert is_same_conformer(doc.to_molblock(), ref.to_molblock(), atol=atol)
+
+
+def assert_align_to_reference_ratio(
+    atol: float, backend: type[HighlightBackendMoleculeT_co]
+) -> None:
+    doc = backend.from_mol(from_fixture_molblock("mol.mol"))
+    before = doc.to_molblock()
+
+    doc.align_to_reference("2:1")
+
+    assert not is_same_conformer(doc.to_molblock(), before, atol=atol), (
+        "aligning to a bounding box ratio should reorient an asymmetric molecule"
+    )
+    assert doc.get_edit_state()[1] is True  # aligned flag set.
+
+    with pytest.raises(ValueError, match="Already aligned"):
+        doc.align_to_reference("2:1")
 
 
 def assert_cleanup(expected: str, atol: float, backend: type[HighlightBackendMoleculeT_co]) -> None:

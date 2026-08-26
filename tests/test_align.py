@@ -198,7 +198,7 @@ def test_get_alignment_flips_and_transform_without_alignment_flips(
     assert np.isclose(found_angle, factor * angle_deg % 360.0, atol=atol)
 
 
-def assert_all_alignments(
+def assert_all_alignments(  # noqa: PLR0913, PLR0917
     q_orig: Chem.Mol,
     allowed_flips: Sequence[tuple[int, int]],
     angle_deg: float,

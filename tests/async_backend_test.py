@@ -121,6 +121,23 @@ async def assert_align_to_reference(
             assert is_same_conformer(await doc.to_molblock(), await ref.to_molblock(), atol=atol)
 
 
+async def assert_align_to_reference_ratio(
+    atol: float, backend: type[AsyncHighlightBackendMoleculeT_co]
+) -> None:
+    doc = await backend.from_mol(from_fixture_molblock("mol.mol"))
+    before = await doc.to_molblock()
+
+    await doc.align_to_reference("2:1")
+
+    assert not is_same_conformer(await doc.to_molblock(), before, atol=atol), (
+        "aligning to a bounding box ratio should reorient an asymmetric molecule"
+    )
+    assert doc.get_edit_state()[1] is True  # aligned flag set.
+
+    with pytest.raises(ValueError, match="Already aligned"):
+        await doc.align_to_reference("2:1")
+
+
 async def assert_cleanup(
     expected: str, atol: float, backend: type[AsyncHighlightBackendMoleculeT_co]
 ) -> None:

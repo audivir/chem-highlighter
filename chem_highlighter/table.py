@@ -27,15 +27,15 @@ MIN_COLUMN_WIDTH_PX = 60
 MAX_COLUMN_WIDTH_PX = 400
 
 
-def _content_width(col: str, row_data: list[dict[str, Any]]) -> int:
+def content_width(col: str, row_data: list[dict[str, Any]]) -> int:
     """Calculate column pixel width based on header and longest value."""
     content_len = max(
         (len(str(row[col])) for row in row_data if row.get(col) is not None),
         default=0,
     )
-    content_width = content_len * CHAR_WIDTH_PX + CELL_PADDING_PX
+    content_px = content_len * CHAR_WIDTH_PX + CELL_PADDING_PX
     header_width = len(col) * CHAR_WIDTH_PX + CELL_PADDING_PX + HEADER_ICON_PADDING_PX
-    width = max(content_width, header_width)
+    width = max(content_px, header_width)
     return max(MIN_COLUMN_WIDTH_PX, min(MAX_COLUMN_WIDTH_PX, width))
 
 
@@ -187,7 +187,7 @@ def polars_to_aggrid(
             col_def["cellRenderer"] = placeholder
             has_svg = True
         else:
-            col_def["width"] = _content_width(col, all_row_data)
+            col_def["width"] = content_width(col, all_row_data)
         col_defs.append(col_def)
 
     grid_opts: GridOptions = {

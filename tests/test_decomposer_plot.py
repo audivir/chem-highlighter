@@ -52,7 +52,7 @@ def test_change_map_atoms_does_not_mutate_input() -> None:
         ("CC[*:1]", 1, "OC[*:2]", 2, "OC[*:1]", "CC[*:2]"),
     ],
 )
-def test_switch_equiv_swaps_substituents_and_map_numbers(
+def test_switch_equiv_swaps_substituents_and_map_numbers(  # noqa: PLR0913, PLR0917
     smi_a: str,
     map_a: int,
     smi_b: str,

@@ -28,7 +28,7 @@ from chem_highlighter.utils import mol_from_smiles
         ),
     ],
 )
-def test_from_multicolor(
+def test_from_multicolor(  # noqa: PLR0913, PLR0917
     atoms: dict[int, list[tuple[float, float, float, float]]],
     bonds: dict[int, list[tuple[float, float, float, float]]],
     rings: dict[int, list[tuple[float, float, float, float]]],

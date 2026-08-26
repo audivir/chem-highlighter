@@ -37,3 +37,5 @@ __all__ = [
     "decomposer",
     "get_smiles_diff",
 ]
+
+__version__ = "0.3.2"

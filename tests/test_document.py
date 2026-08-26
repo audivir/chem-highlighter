@@ -194,3 +194,50 @@ def test_export_whole_document_unsupported_formats(fmt: str) -> None:
         match=f"RDKitDocument does not support exporting the whole document to {fmt}",
     ):
         doc.export(fmt)  # type: ignore[arg-type]
+
+
+def test_export_single_molecule_document_falls_back_to_molecule_export() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO", "SMILES")
+    assert doc.export_string("InChI") == doc.molecule(0).export_string("InChI")
+
+
+def test_document_from_mol_and_from_molblock() -> None:
+    mol = RDKitMolecule.from_string("CCO", "SMILES").mol
+    doc = RDKitDocument.from_mol(mol)
+    assert len(doc) == 1
+
+    other = RDKitDocument.from_molblock(doc.to_molblock())
+    assert other.to_molblock() == doc.to_molblock()
+
+
+def test_to_molblock_with_index_delegates_to_that_molecule() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
+    assert doc.to_molblock(molecule_ix=1) == doc.molecule(1).to_molblock()
+
+
+def test_to_molblock_default_uses_single_molecule_fallback() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO", "SMILES")
+    assert doc.to_molblock() == doc.molecule(0).to_molblock()
+
+
+def test_to_svg_default_and_with_index() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
+    assert "<svg" in doc.to_svg(molecule_ix=0)
+    assert "<svg" in doc.to_svg()
+
+
+def test_to_png_default_and_with_index() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
+    assert doc.to_png(molecule_ix=0)[:4] == b"\x89PNG"
+    assert doc.to_png()[:4] == b"\x89PNG"
+
+
+def test_to_console_delegates_with_index() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
+    assert doc.to_console(molecule_ix=0) == doc.molecule(0).to_console()
+
+
+def test_to_console_joins_every_molecule_by_default() -> None:
+    doc = RDKitDocument.from_bytes(b"CCO.c1ccccc1", "SMILES")
+    expected = ".".join(m.to_console() for m in doc.molecules)
+    assert doc.to_console() == expected

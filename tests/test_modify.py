@@ -438,7 +438,7 @@ def test_parse_transform(
         ("mol_vf.mol", "mol.mol", 0, False, True),
     ],
 )
-def test_apply_transform(
+def test_apply_transform(  # noqa: PLR0913, PLR0917
     q_file: str,
     r_file: str,
     angle_deg: float,

@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier
+_commit: e730ed7
+_src_path: gh:audivir/copier-template
+author_email: pypi@audivir.de
+author_name: Tim Hörmann
+description: Highlighting API for chemical molecules.
+github_org: audivir
+project_name: chem-highlighter
+project_slug: chem_highlighter
+project_type: python
+publishable: true
