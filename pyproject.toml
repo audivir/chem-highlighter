@@ -33,6 +33,7 @@ Issues = "https://github.com/audivir/chem-highlighter/issues"
 Repository = "https://github.com/audivir/chem-highlighter"
 
 [project.optional-dependencies]
+draw = ["imgkit", "pandas"]
 
 [dependency-groups]
 dev = ["coverage", "mypy", "prek", "pytest", "ruff"]

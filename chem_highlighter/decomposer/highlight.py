@@ -342,9 +342,17 @@ def draw_multiple(  # pragma: no cover
     backend: type[HighlightBackendMolecule] = RDKitMolecule,
 ) -> None:
     """Draw multiple molecule groups in grid layout."""
-    import imgkit
     import numpy as np
-    import pandas as pd
+
+    try:
+        import imgkit
+        import pandas as pd
+    except ImportError as e:
+        raise ImportError("draw_multiple requires: pip install 'chem-highlighter[draw]'") from e
+
+    filename = Path(filename)
+    if filename.suffix not in {".html", ".png"}:
+        raise ValueError("filename must end with .html or .png")
 
     n_rows = ceil(len(groups) / n_per_row)
 
@@ -361,18 +369,14 @@ def draw_multiple(  # pragma: no cover
 
     buffer = StringIO()
 
+    # convert numpy matrix to HTML table.
     pd.DataFrame(matrix).to_html(  # type: ignore[unused-ignore,call-overload]
         buffer, border=0, escape=False, header=None, index=None
     )
 
     data = buffer.getvalue()
-    # convert numpy matrix to HTML table.
-    filename = Path(filename)
     if filename.suffix == ".html":
-        Path(filename).write_text(data, encoding="utf-8")
-
-    elif filename.suffix == ".png":
-        imgkit.from_string(data, filename)
+        filename.write_text(data, encoding="utf-8")
 
     else:
-        raise ValueError("filename must end with .html or .png")
+        imgkit.from_string(data, filename)
