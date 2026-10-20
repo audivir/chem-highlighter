@@ -28,8 +28,11 @@ from backend_test import (
     assert_kekulize,
     assert_to_console,
 )
+from rdkit.Chem import rdDepictor
 
-from chem_highlighter.backend.rdkit import RDKitMolecule, mol_from_molblock
+from chem_highlighter.backend.rdkit import RDKitMolecule, draw_mol, mol_from_molblock
+from chem_highlighter.hml import HML
+from chem_highlighter.utils import mol_from_smiles
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -131,3 +134,20 @@ def test_add_label() -> None:
 
 def test_to_console() -> None:
     assert_to_console(RDKitMolecule)
+
+
+@pytest.mark.parametrize("smiles", ["CCO", "c1ccccc1CCN"])
+@pytest.mark.parametrize("highlight", [False, True])
+def test_draw_mol_svg_draws_molecule_once(smiles: str, highlight: bool) -> None:
+    mol = mol_from_smiles(smiles)
+    rdDepictor.Compute2DCoords(mol)
+    ring = [list(r) for r in mol.GetRingInfo().AtomRings()]
+    green = (0.0, 1.0, 0.0, 1.0)
+    rings = {ix: [green] for ix in range(len(ring))}
+    full = HML.from_multicolor({0: [green]}, {0: [green]}, rings, ring)
+    hml = full if highlight else None
+    svg = draw_mol(hml, mol, "svg").decode()
+    unfilled = draw_mol(hml, mol, "svg", fill_rings=False).decode()
+    # ClearDrawing of the SVG drawer keeps the output of the scale pass.
+    assert svg.count("<rect") == 1
+    assert svg.count('class="bond-') == unfilled.count('class="bond-')

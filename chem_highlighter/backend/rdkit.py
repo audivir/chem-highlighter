@@ -75,6 +75,8 @@ def highlight_without_rings(  # noqa: PLR0913,PLR0917
     drawer.DrawMoleculeWithHighlights(mol, legend or "", atoms, bonds, atomrads, widthmults)
 
 
+SVG_HEADER_END = "<!-- END OF HEADER -->"
+
 LEGEND_PATH_RE = re.compile(r'(<path class="legend"[^>]*?fill="([^"]+)")\s*/>')
 
 
@@ -107,17 +109,21 @@ def highlight_rings(
     drawer: Drawer,
     hml: HML,
     mol: Chem.Mol,
-) -> None:
-    """Fill highlighted rings with polygons."""
+) -> str:
+    """Fills highlighted rings with polygons and returns the SVG text of the scale pass."""
+    from rdkit.Chem import Draw
+
     # set molecule scale.
     highlight_without_rings(drawer, hml, mol)
+    # ClearDrawing only appends a background to the SVG text, so the caller drops the scale pass.
+    scale_pass = drawer.GetDrawingText() if isinstance(drawer, Draw.MolDraw2DSVG) else ""
     drawer.ClearDrawing()
-    # prevent duplicate rendering.
     conf = mol.GetConformer()
     for ring_ix, group_ix in hml.highlighted_rings.items():
         color = hml.palette[group_ix]
         ring_atom_ixs = hml.rings[ring_ix]
         draw_polygon(drawer, conf, ring_atom_ixs, color)
+    return scale_pass
 
 
 def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
@@ -164,14 +170,19 @@ def draw_mol(  # noqa: C901,PLR0912,PLR0913,PLR0917
         opts.clearBackground = True  # type: ignore[assignment]
         opts.setBackgroundColour((0.0, 0.0, 0.0, 0.0))
 
+    scale_pass = ""
     if fill_rings:  # pragma: no branch
         # fill rings first to ensure molecule is drawn on top.
-        highlight_rings(drawer, hml, mol)
+        scale_pass = highlight_rings(drawer, hml, mol)
 
     highlight_without_rings(drawer, hml, mol, legend)
 
     if isinstance(drawer, Draw.MolDraw2DSVG):
         svg = get_rdkit_svg(drawer)
+        if scale_pass:
+            # keep the header and drop the molecule drawn by the scale pass.
+            header_end = scale_pass.index(SVG_HEADER_END) + len(SVG_HEADER_END)
+            svg = scale_pass[:header_end] + svg[len(scale_pass) :]
         tree = read_tree(svg)
         if not assure_elem(tree):  # pragma: no cover
             # defensive: RDKit-generated SVG always parses to a root element.
