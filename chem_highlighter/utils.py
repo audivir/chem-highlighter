@@ -92,11 +92,35 @@ def add_hydrogens(data: Sequence[str | Chem.Mol]) -> list[Chem.Mol]:
     return [Chem.AddHs(get_smiles_mol_pair(d).mol, addCoords=True) for d in data]
 
 
+def add_aromatic_hcounts(mol: Chem.Mol, mol_block: str) -> str:
+    """Add `HCOUNT` to aromatic heteroatoms with hydrogens in V3000 molblock.
+
+    Aromatic bonds do not tell ChemDraw which ring atom carries the hydrogen of `[nH]`, so it
+    draws an invalid valence without hydrogen. Kekulized molblocks do not need this.
+    """
+    lines = mol_block.split("\n")
+    in_atom_block = False
+    atom_idx = 0
+    for i, line in enumerate(lines):
+        if line.startswith("M  V30 BEGIN ATOM"):
+            in_atom_block = True
+        elif line.startswith("M  V30 END ATOM"):
+            in_atom_block = False
+        elif in_atom_block and line.startswith("M  V30 "):
+            atom = mol.GetAtomWithIdx(atom_idx)
+            if atom.GetIsAromatic() and atom.GetSymbol() != "C" and atom.GetTotalNumHs() > 0:
+                lines[i] = f"{line} HCOUNT={atom.GetTotalNumHs()}"
+            atom_idx += 1
+    return "\n".join(lines)
+
+
 def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
     """Generate unrounded V3000 molblock."""
     from rdkit import Chem
 
     mol_block = Chem.MolToMolBlock(mol, kekulize=kekulize, forceV3000=True)
+    if not kekulize:
+        mol_block = add_aromatic_hcounts(mol, mol_block)
 
     if mol.GetNumConformers() == 0:  # pragma: no cover
         return mol_block

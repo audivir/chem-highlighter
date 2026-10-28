@@ -14,6 +14,7 @@ from rdkit.Geometry import Point3D
 from utils import FIXTURES, assert_mols_equal, from_fixture_molblock, get_conf_position_mae, set_env
 
 from chem_highlighter.utils import (
+    add_aromatic_hcounts,
     add_hydrogens,
     are_atoms_equal,
     are_bonds_equal,
@@ -315,3 +316,26 @@ def test_get_png_render_options() -> None:
         CHEM_HIGHLIGHTER_PNG_HEIGHT="100",
     ):
         assert get_png_render_options() == (True, 100.0, 100.0)
+
+
+@pytest.mark.parametrize(
+    ("smiles", "kekulize", "expected"),
+    [
+        ("c1nn[nH]n1", False, ["HCOUNT=1"]),
+        ("O=c1cccc[nH]1", False, ["HCOUNT=1"]),
+        ("c1ccc2[nH]c(N)nc2c1", False, ["HCOUNT=1"]),  # the exocyclic NH2 is not aromatic.
+        ("c1ccncc1", False, []),  # the carbons carry hydrogens, but only heteroatoms need a count.
+        ("c1nn[nH]n1", True, []),  # kekulized bonds already fix the hydrogen.
+    ],
+)
+def test_get_high_precision_v3000_hcount(smiles: str, kekulize: bool, expected: list[str]) -> None:
+    mol = mol_from_smiles(smiles)
+    rdDepictor.Compute2DCoords(mol)
+    molblock = get_high_precision_v3000(mol, kekulize=kekulize)
+    assert [tok for tok in molblock.split() if tok.startswith("HCOUNT=")] == expected
+
+
+def test_add_aromatic_hcounts_without_conformer() -> None:
+    mol = mol_from_smiles("c1cc[nH]c1")
+    molblock = add_aromatic_hcounts(mol, Chem.MolToMolBlock(mol, forceV3000=True))
+    assert molblock.count("HCOUNT=1") == 1
