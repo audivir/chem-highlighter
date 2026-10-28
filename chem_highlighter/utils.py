@@ -164,7 +164,7 @@ def is_same_layout(molblock_a: str, molblock_b: str, atol: float) -> bool:
 
     mol_a: Chem.Mol | None = Chem.MolFromMolBlock(molblock_a, sanitize=False, removeHs=False)
     mol_b: Chem.Mol | None = Chem.MolFromMolBlock(molblock_b, sanitize=False, removeHs=False)
-    if mol_a is None or mol_b is None:
+    if mol_a is None or mol_b is None:  # pragma: no cover
         raise ValueError("Invalid molblocks")
     if [a.GetAtomicNum() for a in mol_a.GetAtoms()] != [a.GetAtomicNum() for a in mol_b.GetAtoms()]:
         return False
