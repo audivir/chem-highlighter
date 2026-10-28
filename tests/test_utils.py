@@ -30,6 +30,7 @@ from chem_highlighter.utils import (
     get_png_render_options,
     get_smiles_mol_pair,
     is_same_conformer,
+    is_same_layout,
     mol_from_smiles,
     mol_to_smiles,
     move_molecule,
@@ -339,3 +340,22 @@ def test_add_aromatic_hcounts_without_conformer() -> None:
     mol = mol_from_smiles("c1cc[nH]c1")
     molblock = add_aromatic_hcounts(mol, Chem.MolToMolBlock(mol, forceV3000=True))
     assert molblock.count("HCOUNT=1") == 1
+
+
+def _rotated_molblock(smiles: str, angle: float, shift: float, moved_atom: int | None) -> str:
+    mol = mol_from_smiles(smiles)
+    rdDepictor.Compute2DCoords(mol)
+    conf = mol.GetConformer()
+    cos, sin = np.cos(angle), np.sin(angle)
+    for i in range(mol.GetNumAtoms()):
+        pos = conf.GetAtomPosition(i)
+        offset = 0.5 if i == moved_atom else 0.0
+        x = cos * pos.x - sin * pos.y + shift + offset
+        conf.SetAtomPosition(i, Point3D(x, sin * pos.x + cos * pos.y, 0))
+    return get_high_precision_v3000(mol)
+
+
+def test_is_same_layout_ignores_rotation_and_translation() -> None:
+    a = _rotated_molblock("c1cc[nH]c1", 0.0, 0.0, None)
+    assert is_same_layout(a, _rotated_molblock("c1cc[nH]c1", 1.0, 3.0, None), atol=0.02)
+    assert not is_same_layout(a, _rotated_molblock("c1cc[nH]c1", 1.0, 3.0, 2), atol=0.02)
