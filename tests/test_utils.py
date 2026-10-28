@@ -31,6 +31,7 @@ from chem_highlighter.utils import (
     get_smiles_mol_pair,
     is_same_conformer,
     is_same_layout,
+    mol_from_molblock,
     mol_from_smiles,
     mol_to_smiles,
     move_molecule,
@@ -361,3 +362,23 @@ def test_is_same_layout_ignores_rotation_and_translation() -> None:
     assert not is_same_layout(a, _rotated_molblock("c1cc[nH]c1", 1.0, 3.0, 2), atol=0.02)
     # same atom count, but the nitrogen of pyrrole is an oxygen in furan.
     assert not is_same_layout(a, _rotated_molblock("c1ccoc1", 0.0, 0.0, None), atol=100)
+
+
+@pytest.mark.parametrize(
+    "smiles", ["c1nn[nH]n1", "c1nnn[nH]1", "c1ccc2[nH]ccc2c1", "O=c1cccc[nH]1", "c1ccc2[nH]cnc2c1"]
+)
+def test_mol_from_molblock_roundtrips_aromatic_nh(smiles: str) -> None:
+    mol = mol_from_smiles(smiles)
+    rdDepictor.Compute2DCoords(mol)
+    # plain `Chem.MolFromMolBlock` returns None for aromatic bonds without Kekule structure.
+    assert Chem.MolFromMolBlock(get_high_precision_v3000(mol), removeHs=False) is None
+    parsed = mol_from_molblock(get_high_precision_v3000(mol))
+    assert Chem.MolToSmiles(parsed) == Chem.MolToSmiles(mol)
+
+
+def test_mol_from_molblock_rejects_impossible_hcount() -> None:
+    mol = mol_from_smiles("c1nn[nH]n1")
+    rdDepictor.Compute2DCoords(mol)
+    molblock = get_high_precision_v3000(mol).replace("HCOUNT=1", "HCOUNT=2")
+    with pytest.raises(ValueError, match="valence"):
+        mol_from_molblock(molblock)

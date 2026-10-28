@@ -114,6 +114,44 @@ def add_aromatic_hcounts(mol: Chem.Mol, mol_block: str) -> str:
     return "\n".join(lines)
 
 
+def mol_from_molblock(molblock: str, sanitize: bool = True) -> Chem.Mol:
+    """Parse molblock into RDKit molecule and apply V3000 `HCOUNT` as explicit hydrogens.
+
+    Aromatic molblocks from `get_high_precision_v3000` state the hydrogen count of aromatic
+    heteroatoms such as the `[nH]` of azoles, which RDKit cannot infer from aromatic bonds.
+    Hydrogens are kept.
+
+    Raises:
+        ValueError: If molblock is invalid.
+    """
+    from rdkit import Chem
+
+    hcounts: dict[int, int] = {}
+    in_atom_block = False
+    atom_idx = 0
+    for line in molblock.splitlines():
+        if line.startswith("M  V30 BEGIN ATOM"):
+            in_atom_block = True
+        elif line.startswith("M  V30 END ATOM"):
+            in_atom_block = False
+        elif in_atom_block and line.startswith("M  V30 "):
+            match = re.search(r"\bHCOUNT=(\d+)\b", line)
+            if match:
+                hcounts[atom_idx] = int(match.group(1))
+            atom_idx += 1
+
+    mol: Chem.Mol | None = Chem.MolFromMolBlock(molblock, sanitize=False, removeHs=False)
+    if mol is None:
+        raise ValueError("Invalid molblock")
+    for idx, count in hcounts.items():
+        atom = mol.GetAtomWithIdx(idx)
+        atom.SetNumExplicitHs(count)
+        atom.SetNoImplicit(True)
+    if sanitize:
+        Chem.SanitizeMol(mol)
+    return mol
+
+
 def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
     """Generate unrounded V3000 molblock."""
     from rdkit import Chem
@@ -160,12 +198,9 @@ def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
 def is_same_layout(molblock_a: str, molblock_b: str, atol: float) -> bool:
     """Check if molblocks with the same atom order differ only by rotation and translation."""
     import numpy as np
-    from rdkit import Chem
 
-    mol_a: Chem.Mol | None = Chem.MolFromMolBlock(molblock_a, sanitize=False, removeHs=False)
-    mol_b: Chem.Mol | None = Chem.MolFromMolBlock(molblock_b, sanitize=False, removeHs=False)
-    if mol_a is None or mol_b is None:  # pragma: no cover
-        raise ValueError("Invalid molblocks")
+    mol_a = mol_from_molblock(molblock_a, sanitize=False)
+    mol_b = mol_from_molblock(molblock_b, sanitize=False)
     if [a.GetAtomicNum() for a in mol_a.GetAtoms()] != [a.GetAtomicNum() for a in mol_b.GetAtoms()]:
         return False
 
@@ -180,6 +215,16 @@ def is_same_layout(molblock_a: str, molblock_b: str, atol: float) -> bool:
     return bool(np.abs(pos_b @ rotation - pos_a).max() < atol)
 
 
+def _as_mol(mol_or_molblock: Chem.Mol | str) -> Chem.Mol | None:
+    """Parse molblock, or return molecule unchanged. Returns `None` for an invalid molblock."""
+    if not isinstance(mol_or_molblock, str):
+        return mol_or_molblock
+    try:
+        return mol_from_molblock(mol_or_molblock)
+    except ValueError:
+        return None
+
+
 def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     mol_or_molblock_a: Chem.Mol | str,
     mol_or_molblock_b: Chem.Mol | str,
@@ -192,16 +237,8 @@ def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     from scipy.optimize import linear_sum_assignment
     from scipy.spatial.distance import cdist
 
-    mol_a: Chem.Mol | None = (
-        Chem.MolFromMolBlock(mol_or_molblock_a, removeHs=False)
-        if isinstance(mol_or_molblock_a, str)
-        else mol_or_molblock_a
-    )
-    mol_b: Chem.Mol | None = (
-        Chem.MolFromMolBlock(mol_or_molblock_b, removeHs=False)
-        if isinstance(mol_or_molblock_b, str)
-        else mol_or_molblock_b
-    )
+    mol_a = _as_mol(mol_or_molblock_a)
+    mol_b = _as_mol(mol_or_molblock_b)
 
     if not mol_a or not mol_b:
         raise ValueError("Invalid molblocks")

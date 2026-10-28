@@ -25,7 +25,12 @@ from chem_highlighter.hml import (
     OutputFormatNotSupported,
 )
 from chem_highlighter.modify import apply_transform, flip_bond, parse_transform
-from chem_highlighter.utils import get_atoms, get_high_precision_v3000, get_png_render_options
+from chem_highlighter.utils import (
+    get_atoms,
+    get_high_precision_v3000,
+    get_png_render_options,
+    mol_from_molblock,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -38,20 +43,6 @@ logger = logging.getLogger(__name__)
 Drawer: TypeAlias = "Draw.MolDraw2DCairo | Draw.MolDraw2DSVG"
 
 SENTINEL_ISOTOPE = 999
-
-
-def mol_from_molblock(molblock: str) -> Chem.Mol:
-    """Parse mol block into sanitized RDKit molecule.
-
-    Raises:
-        ValueError: If molblock is invalid.
-    """
-    from rdkit import Chem
-
-    mol: Chem.Mol | None = Chem.MolFromMolBlock(molblock, removeHs=False)
-    if not mol:
-        raise ValueError("Invalid molblock")
-    return mol
 
 
 def highlight_without_rings(  # noqa: PLR0913,PLR0917
@@ -295,7 +286,10 @@ class RDKitMolecule(HighlightBackendMolecule):
                 sd_mol: Chem.Mol | None = next(iter(sds), None)
             mol = sd_mol
         elif fmt == "Mol":
-            mol = Chem.MolFromMolBlock(data.decode(), removeHs=False)
+            try:
+                mol = mol_from_molblock(data.decode())
+            except ValueError:
+                mol = None
         elif fmt == "CDXML":
             mols: tuple[Chem.Mol, ...] = Chem.MolsFromCDXML(data.decode(), removeHs=False)
             if not mols:
