@@ -30,9 +30,9 @@ from backend_test import (
 )
 from rdkit.Chem import rdDepictor
 
-from chem_highlighter.backend.rdkit import RDKitMolecule, draw_mol, mol_from_molblock
+from chem_highlighter.backend.rdkit import RDKitMolecule, draw_mol
 from chem_highlighter.hml import HML
-from chem_highlighter.utils import mol_from_smiles
+from chem_highlighter.utils import mol_from_molblock, mol_from_smiles
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
