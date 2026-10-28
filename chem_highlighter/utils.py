@@ -157,6 +157,29 @@ def get_high_precision_v3000(mol: Chem.Mol, kekulize: bool = False) -> str:
     return "\n".join(lines)
 
 
+def is_same_layout(molblock_a: str, molblock_b: str, atol: float) -> bool:
+    """Check if molblocks with the same atom order differ only by rotation and translation."""
+    import numpy as np
+    from rdkit import Chem
+
+    mol_a: Chem.Mol | None = Chem.MolFromMolBlock(molblock_a, sanitize=False, removeHs=False)
+    mol_b: Chem.Mol | None = Chem.MolFromMolBlock(molblock_b, sanitize=False, removeHs=False)
+    if mol_a is None or mol_b is None:
+        raise ValueError("Invalid molblocks")
+    if [a.GetAtomicNum() for a in mol_a.GetAtoms()] != [a.GetAtomicNum() for a in mol_b.GetAtoms()]:
+        return False
+
+    pos_a = np.array(mol_a.GetConformer().GetPositions())
+    pos_b = np.array(mol_b.GetConformer().GetPositions())
+    pos_a -= pos_a.mean(axis=0)
+    pos_b -= pos_b.mean(axis=0)
+
+    # kabsch rotation without reflection.
+    u, _, vt = np.linalg.svd(pos_b.T @ pos_a)
+    rotation = u @ np.diag([1, 1, np.sign(np.linalg.det(u @ vt))]) @ vt
+    return bool(np.abs(pos_b @ rotation - pos_a).max() < atol)
+
+
 def is_same_conformer(  # noqa: C901,PLR0911,PLR0912
     mol_or_molblock_a: Chem.Mol | str,
     mol_or_molblock_b: Chem.Mol | str,

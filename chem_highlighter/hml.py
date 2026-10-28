@@ -17,7 +17,7 @@ from chem_highlighter.utils import (
     RESET_COLOR,
     get_ansi_color,
     get_high_precision_v3000,
-    is_same_conformer,
+    is_same_layout,
 )
 
 if TYPE_CHECKING:
@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     from chem_highlighter.utils import RGBA
 
 MAX_CLEANUPS = 100
+CLEANUP_ATOL = 0.02
+"""Largest atom deviation for two cleanups to count as the same layout."""
 
 HighlightBackendMoleculeT_co = TypeVar(
     "HighlightBackendMoleculeT_co",
@@ -180,10 +182,7 @@ class HighlightBackendMolecule(ABC):
             self.cleanup_callback()
             self.kekulize_callback(kekulized)
             curr_clean = self.to_molblock()
-            if any(
-                is_same_conformer(curr_clean, c, atol=1e-5, quiet=True)
-                for c in reversed(prev_cleans)
-            ):
+            if any(is_same_layout(curr_clean, c, atol=CLEANUP_ATOL) for c in reversed(prev_cleans)):
                 break
             prev_cleans.append(curr_clean)
         else:  # pragma: no cover
@@ -404,10 +403,7 @@ class AsyncHighlightBackendMolecule(ABC):
             await self.cleanup_callback()
             await self.kekulize_callback(kekulized)
             curr_clean = await self.to_molblock()
-            if any(
-                is_same_conformer(curr_clean, c, atol=1e-5, quiet=True)
-                for c in reversed(prev_cleans)
-            ):
+            if any(is_same_layout(curr_clean, c, atol=CLEANUP_ATOL) for c in reversed(prev_cleans)):
                 break
             prev_cleans.append(curr_clean)
         else:  # pragma: no cover
