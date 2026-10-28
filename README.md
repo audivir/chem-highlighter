@@ -55,6 +55,33 @@ png = doc.to_png()
 per document (calling it twice, or in the wrong order relative to another, raises `ValueError`);
 see the class docstrings for the exact rules.
 
+## Aromatic molblocks
+
+`get_high_precision_v3000` writes aromatic bonds as bond type 4 unless `kekulize=True` is passed.
+ChemDraw draws such rings with a circle, which looks different from the alternating bonds of a
+kekulized ring. An aromatic molblock does not state which ring atom carries the hydrogen of an
+aromatic NH, for example the `[nH]` of tetrazole, indole, or pyridone, so ChemDraw would draw an
+invalid valence without the hydrogen.
+
+The function therefore adds the V3000 atom property `HCOUNT=<n>` to every aromatic atom that is
+not carbon and has hydrogens. ChemDraw reads it and draws the NH. RDKit ignores `HCOUNT` and
+cannot kekulize such a molblock, so `Chem.MolFromMolBlock` returns `None`. Use
+`chem_highlighter.utils.mol_from_molblock` instead. It applies `HCOUNT` as explicit hydrogens
+before sanitizing and restores the aromatic molecule:
+
+```python
+from rdkit import Chem
+
+from chem_highlighter.utils import get_high_precision_v3000, mol_from_molblock
+
+mol = Chem.MolFromSmiles("c1nn[nH]n1")
+molblock = get_high_precision_v3000(mol)
+print(Chem.MolToSmiles(mol_from_molblock(molblock)))  # c1nn[nH]n1
+```
+
+`HCOUNT` is a convention of these tools and not part of the molfile standard, so other readers
+ignore it. Pass `kekulize=True` for molblocks that other software has to read.
+
 ## Modules
 
 - `hml` — the `HighlightBackendMolecule` ABC, the multi-molecule `Document` class, and
@@ -67,8 +94,8 @@ see the class docstrings for the exact rules.
 - `modify` — rotate/mirror/flip-bond primitives on RDKit molecules.
 - `state` — save and restore RDKit atom state (used internally by `modify`/`align`).
 - `table` — render a Polars DataFrame as an AG Grid HTML table.
-- `utils` — shared helpers: conformer comparison, high-precision V3000 export, PNG render
-  options, color/console formatting.
+- `utils` — shared helpers: conformer comparison, high-precision V3000 export and import (with
+  `HCOUNT`), PNG render options, color/console formatting.
 
 ## Environment variables
 

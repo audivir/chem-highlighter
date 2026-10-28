@@ -18,6 +18,7 @@ from chem_highlighter.utils import (
     get_ansi_color,
     get_high_precision_v3000,
     is_same_layout,
+    mol_from_molblock,
 )
 
 if TYPE_CHECKING:
@@ -291,7 +292,7 @@ def _render_console(molblock: str, kekulized: bool, hml_json: str | None, canoni
     """Render molecule as console-compatible string visualization."""
     from rdkit import Chem
 
-    mol = Chem.MolFromMolBlock(molblock, removeHs=False)
+    mol = mol_from_molblock(molblock)
 
     smiles = Chem.MolToSmiles(
         mol, kekuleSmiles=kekulized, canonical=canonical, allBondsExplicit=True

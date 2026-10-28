@@ -13,6 +13,7 @@ from chem_highlighter.utils import (
     get_atom_position,
     get_mol_center,
     get_neighbors,
+    mol_from_molblock,
     raise_if_3d_molecule,
     recenter_mol,
 )
@@ -47,20 +48,6 @@ def get_2d_mol(mol: Chem.Mol, atol: float) -> Chem.Mol:
         raise ValueError("No coordinates available for molecule") from e
 
     raise_if_3d_molecule(conf, atol=atol)
-    return mol
-
-
-def _parse_molblock(molblock: str) -> Chem.Mol:
-    """Parse mol block into RDKit molecule.
-
-    Raises:
-        ValueError: If mol block is invalid.
-    """
-    from rdkit import Chem
-
-    mol: Chem.Mol | None = Chem.MolFromMolBlock(molblock, removeHs=False)
-    if not mol:
-        raise ValueError("Invalid molblock")
     return mol
 
 
@@ -298,13 +285,13 @@ def get_alignment_ops_from_molblock(
         Tuple of bond flips (bond index and anchor atom index), boolean indicating
         global horizontal flip, and rotation angle in degrees.
     """
-    query = get_2d_mol(_parse_molblock(query_molblock), atol=atol)
+    query = get_2d_mol(mol_from_molblock(query_molblock), atol=atol)
 
     ratio = parse_possible_ratio(reference)
     if ratio is not None:
         return [], False, get_best_fit_angle(query, ratio)
 
-    reference_mol = get_2d_mol(_parse_molblock(reference), atol=atol)
+    reference_mol = get_2d_mol(mol_from_molblock(reference), atol=atol)
     flips, transform = get_alignment_flips_and_transform(query, reference_mol, atol=atol)
     global_flip, angle = parse_transform(transform, atol=atol)
     return flips, global_flip, angle
