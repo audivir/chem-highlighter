@@ -359,3 +359,5 @@ def test_is_same_layout_ignores_rotation_and_translation() -> None:
     a = _rotated_molblock("c1cc[nH]c1", 0.0, 0.0, None)
     assert is_same_layout(a, _rotated_molblock("c1cc[nH]c1", 1.0, 3.0, None), atol=0.02)
     assert not is_same_layout(a, _rotated_molblock("c1cc[nH]c1", 1.0, 3.0, 2), atol=0.02)
+    # same atom count, but the nitrogen of pyrrole is an oxygen in furan.
+    assert not is_same_layout(a, _rotated_molblock("c1ccoc1", 0.0, 0.0, None), atol=100)
