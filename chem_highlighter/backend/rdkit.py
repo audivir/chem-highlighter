@@ -8,7 +8,6 @@ import re
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, Literal, TypeAlias
 
-import matplotlib as mpl
 import msgspec
 from typing_extensions import Self, override
 
@@ -85,6 +84,7 @@ def draw_polygon(
     color: str,
 ) -> None:
     """Draw polygon connecting specified atoms."""
+    import matplotlib as mpl
     from rdkit.Geometry import Point2D
 
     points: list[Point2D] = []

@@ -72,12 +72,12 @@ def get_atom_position(conf: Chem.Conformer, ix: int) -> Point3D:
 
 def get_atoms(mol: Chem.Mol) -> tuple[Chem.Atom, ...]:
     """Return atoms from RDKit molecule."""
-    return tuple(mol.GetAtoms())
+    return tuple(mol.GetAtoms())  # type: ignore[no-untyped-call]
 
 
 def get_bonds(mol: Chem.Mol) -> tuple[Chem.Bond, ...]:
     """Return bonds from RDKit molecule."""
-    return tuple(mol.GetBonds())
+    return tuple(mol.GetBonds())  # type: ignore[no-untyped-call]
 
 
 def get_neighbors(atom: Chem.Atom) -> tuple[Chem.Atom, ...]:
@@ -201,7 +201,7 @@ def is_same_layout(molblock_a: str, molblock_b: str, atol: float) -> bool:
 
     mol_a = mol_from_molblock(molblock_a, sanitize=False)
     mol_b = mol_from_molblock(molblock_b, sanitize=False)
-    if [a.GetAtomicNum() for a in mol_a.GetAtoms()] != [a.GetAtomicNum() for a in mol_b.GetAtoms()]:
+    if [a.GetAtomicNum() for a in get_atoms(mol_a)] != [a.GetAtomicNum() for a in get_atoms(mol_b)]:
         return False
 
     pos_a = np.array(mol_a.GetConformer().GetPositions())

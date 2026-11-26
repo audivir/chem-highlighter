@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Literal
 
-from rdkit.Chem.rdMolTransforms import TransformConformer
-
 from chem_highlighter.state import AtomState
 from chem_highlighter.utils import (
     flatten_conformer_z,
@@ -128,6 +126,7 @@ def apply_transform(  # noqa: PLR0913
     """
     import numpy as np
     from rdkit import Chem
+    from rdkit.Chem.rdMolTransforms import TransformConformer
 
     mol = Chem.Mol(mol)
     conf = mol.GetConformer()
