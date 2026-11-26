@@ -158,9 +158,11 @@ class HighlightBackendMolecule(ABC):
     def align_to_reference(
         self, reference: str, mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT
     ) -> Self:
-        """Align molecule to reference molblock or bounding box ratio.
+        """Aligns molecule to reference molblock or bounding box ratio.
 
-        `mcs_timeout` limits each MCS search in seconds (None for no limit).
+        Args:
+            reference: Molblock or bounding box aspect ratio (e.g., "2:1").
+            mcs_timeout: Time limit in seconds of each MCS search, or None for no limit.
         """
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
@@ -386,9 +388,11 @@ class AsyncHighlightBackendMolecule(ABC):
     async def align_to_reference(
         self, reference: str, mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT
     ) -> Self:
-        """Align molecule to reference molblock or bounding box ratio.
+        """Aligns molecule to reference molblock or bounding box ratio.
 
-        `mcs_timeout` limits each MCS search in seconds (None for no limit).
+        Args:
+            reference: Molblock or bounding box aspect ratio (e.g., "2:1").
+            mcs_timeout: Time limit in seconds of each MCS search, or None for no limit.
         """
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:

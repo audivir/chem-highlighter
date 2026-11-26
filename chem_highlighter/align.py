@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 DEFAULT_MCS_TIMEOUT = 60
+"""Time limit in seconds of each MCS search."""
 
 Flip: TypeAlias = tuple[int, int]
 Flips: TypeAlias = list[Flip]
@@ -57,13 +58,13 @@ def get_2d_mol(mol: Chem.Mol, atol: float) -> Chem.Mol:
 def find_mcs(
     query: Chem.Mol, reference: Chem.Mol, mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT
 ) -> dict[int, int]:
-    """Find maximum common substructure between two molecules.
+    """Finds maximum common substructure between two molecules.
 
     Args:
         query: Molecule to align.
         reference: Reference molecule.
-        mcs_timeout: Time limit of the search in seconds, or None for no limit. If the limit is
-            hit, the best substructure found so far is used and a warning is logged.
+        mcs_timeout: Time limit of the search in seconds, or None for no limit. On timeout, the
+            best substructure found so far is used and a warning is logged.
 
     Returns:
         Mapping of atom indices from query molecule to reference molecule.
@@ -205,9 +206,13 @@ def get_alignment_flips_and_transform(
     atol: float,
     mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT,
 ) -> tuple[list[tuple[int, int]], NDArray[np.float64]]:
-    """Compute bond flips and transformation matrix to align two molecules.
+    """Computes bond flips and transformation matrix to align two molecules.
 
-    The MCS searches are limited to `mcs_timeout` seconds each (None for no limit).
+    Args:
+        query: Molecule to align.
+        reference: Reference molecule.
+        atol: Absolute tolerance for coordinate comparisons.
+        mcs_timeout: Time limit in seconds of each MCS search, or None for no limit.
 
     Returns:
         Tuple of bond flips (bond index and anchor atom index) and 4x4 transformation matrix.
@@ -306,10 +311,14 @@ def get_alignment_ops_from_molblock(
     atol: float,
     mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT,
 ) -> tuple[list[tuple[int, int]], bool, float]:
-    """Compute flips and rotation angle required to align molecule to reference.
+    """Computes flips and rotation angle required to align molecule to reference.
 
-    Reference may be molblock or bounding box aspect ratio (e.g., "2:1"). `mcs_timeout` limits
-    each MCS search in seconds (None for no limit) and is ignored for ratios.
+    Args:
+        query_molblock: Molblock of the molecule to align.
+        reference: Molblock or bounding box aspect ratio (e.g., "2:1").
+        atol: Absolute tolerance for coordinate comparisons.
+        mcs_timeout: Time limit in seconds of each MCS search, or None for no limit. Ignored for
+            aspect ratios.
 
     Returns:
         Tuple of bond flips (bond index and anchor atom index), boolean indicating
