@@ -326,12 +326,16 @@ class RDKitMolecule(HighlightBackendMolecule):
         self.mol = apply_transform(query, angle, flip_horizontal=False, atol=atol)
 
     @override
-    def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+    def align_to_reference_mol_callback(
+        self, reference_molblock: str, mcs_timeout: float | None
+    ) -> None:
         """Align molecule to reference molblock."""
         atol = 1e-5
         query = get_2d_mol(mol_from_molblock(self.to_molblock()), atol=atol)
         reference = get_2d_mol(mol_from_molblock(reference_molblock), atol=atol)
-        flips, transform = get_alignment_flips_and_transform(query, reference, atol=atol)
+        flips, transform = get_alignment_flips_and_transform(
+            query, reference, atol=atol, mcs_timeout=mcs_timeout
+        )
         global_flip, angle = parse_transform(transform, atol=atol)
         for bond_ix, anchor_atom_ix in flips:
             query = flip_bond(query, bond_ix, anchor_atom_ix, atol=atol)
@@ -506,10 +510,12 @@ class AsyncRDKitMolecule(AsyncHighlightBackendMolecule):
         )
 
     @override
-    async def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+    async def align_to_reference_mol_callback(
+        self, reference_molblock: str, mcs_timeout: float | None
+    ) -> None:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(
-            None, self._sync.align_to_reference_mol_callback, reference_molblock
+            None, self._sync.align_to_reference_mol_callback, reference_molblock, mcs_timeout
         )
 
     @override

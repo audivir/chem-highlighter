@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Generic, Literal, TypeAlias, final
 import msgspec
 from typing_extensions import Self, TypeVar
 
-from chem_highlighter.align import parse_possible_ratio
+from chem_highlighter.align import DEFAULT_MCS_TIMEOUT, parse_possible_ratio
 from chem_highlighter.backend.map_tokens import map_smiles_tokens
 from chem_highlighter.utils import (
     RESET_COLOR,
@@ -149,12 +149,19 @@ class HighlightBackendMolecule(ABC):
         """Align bounding box to reference ratio."""
 
     @abstractmethod
-    def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+    def align_to_reference_mol_callback(
+        self, reference_molblock: str, mcs_timeout: float | None
+    ) -> None:
         """Align molecule to reference molblock."""
 
     @final
-    def align_to_reference(self, reference: str) -> Self:
-        """Align molecule to reference molblock or bounding box ratio."""
+    def align_to_reference(
+        self, reference: str, mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT
+    ) -> Self:
+        """Align molecule to reference molblock or bounding box ratio.
+
+        `mcs_timeout` limits each MCS search in seconds (None for no limit).
+        """
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
             raise ValueError("Already aligned")
@@ -162,7 +169,7 @@ class HighlightBackendMolecule(ABC):
         if ratio is not None:
             self.align_to_reference_ratio_callback(*ratio)
         else:
-            self.align_to_reference_mol_callback(reference)
+            self.align_to_reference_mol_callback(reference, mcs_timeout)
         self.set_edit_state(kekulized, True, hydrogens_hidden)
         return self
 
@@ -370,12 +377,19 @@ class AsyncHighlightBackendMolecule(ABC):
         """Align bounding box to reference ratio."""
 
     @abstractmethod
-    async def align_to_reference_mol_callback(self, reference_molblock: str) -> None:
+    async def align_to_reference_mol_callback(
+        self, reference_molblock: str, mcs_timeout: float | None
+    ) -> None:
         """Align molecule to reference molblock."""
 
     @final
-    async def align_to_reference(self, reference: str) -> Self:
-        """Align molecule to reference molblock or bounding box ratio."""
+    async def align_to_reference(
+        self, reference: str, mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT
+    ) -> Self:
+        """Align molecule to reference molblock or bounding box ratio.
+
+        `mcs_timeout` limits each MCS search in seconds (None for no limit).
+        """
         kekulized, aligned, hydrogens_hidden = self.get_edit_state()
         if aligned:
             raise ValueError("Already aligned")
@@ -383,7 +397,7 @@ class AsyncHighlightBackendMolecule(ABC):
         if ratio is not None:
             await self.align_to_reference_ratio_callback(*ratio)
         else:
-            await self.align_to_reference_mol_callback(reference)
+            await self.align_to_reference_mol_callback(reference, mcs_timeout)
         self.set_edit_state(kekulized, True, hydrogens_hidden)
         return self
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import math
 import re
 from typing import TYPE_CHECKING, TypeAlias
 
@@ -26,6 +27,8 @@ if TYPE_CHECKING:
     from rdkit import Chem
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MCS_TIMEOUT = 60
 
 Flip: TypeAlias = tuple[int, int]
 Flips: TypeAlias = list[Flip]
@@ -51,8 +54,16 @@ def get_2d_mol(mol: Chem.Mol, atol: float) -> Chem.Mol:
     return mol
 
 
-def find_mcs(query: Chem.Mol, reference: Chem.Mol) -> dict[int, int]:
+def find_mcs(
+    query: Chem.Mol, reference: Chem.Mol, mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT
+) -> dict[int, int]:
     """Find maximum common substructure between two molecules.
+
+    Args:
+        query: Molecule to align.
+        reference: Reference molecule.
+        mcs_timeout: Time limit of the search in seconds, or None for no limit. If the limit is
+            hit, the best substructure found so far is used and a warning is logged.
 
     Returns:
         Mapping of atom indices from query molecule to reference molecule.
@@ -64,8 +75,18 @@ def find_mcs(query: Chem.Mol, reference: Chem.Mol) -> dict[int, int]:
     from rdkit.Chem import rdFMCS
 
     mcs = rdFMCS.FindMCS(
-        [query, reference], matchValences=True, completeRingsOnly=True, ringMatchesRingOnly=True
+        [query, reference],
+        matchValences=True,
+        completeRingsOnly=True,
+        ringMatchesRingOnly=True,
+        timeout=0 if mcs_timeout is None else max(1, math.ceil(mcs_timeout)),
     )
+    if mcs.canceled:
+        logger.warning(
+            "MCS search timed out after %s s, using the partial MCS with %d atoms",
+            mcs_timeout,
+            mcs.numAtoms,
+        )
     mcs_mol = Chem.MolFromSmarts(mcs.smartsString)
 
     query_match = query.GetSubstructMatch(mcs_mol)
@@ -179,9 +200,14 @@ def flip_misaligned_bonds(
 
 
 def get_alignment_flips_and_transform(
-    query: Chem.Mol, reference: Chem.Mol, atol: float
+    query: Chem.Mol,
+    reference: Chem.Mol,
+    atol: float,
+    mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT,
 ) -> tuple[list[tuple[int, int]], NDArray[np.float64]]:
     """Compute bond flips and transformation matrix to align two molecules.
+
+    The MCS searches are limited to `mcs_timeout` seconds each (None for no limit).
 
     Returns:
         Tuple of bond flips (bond index and anchor atom index) and 4x4 transformation matrix.
@@ -197,7 +223,7 @@ def get_alignment_flips_and_transform(
     if is_same_conformer(query, reference, atol=atol, quiet=True):
         return [], np.eye(4)
 
-    bare_mcs_match = find_mcs(query, reference)
+    bare_mcs_match = find_mcs(query, reference, mcs_timeout=mcs_timeout)
 
     heavy_bare_mcs_match = {
         q_ix: r_ix
@@ -215,7 +241,7 @@ def get_alignment_flips_and_transform(
     query = Chem.AddHs(query, addCoords=True)
     reference = Chem.AddHs(reference, addCoords=True)
 
-    mcs_match = find_mcs(query, reference)
+    mcs_match = find_mcs(query, reference, mcs_timeout=mcs_timeout)
 
     flips = flip_misaligned_bonds(query, reference, mcs_match, atol=atol)
 
@@ -275,11 +301,15 @@ def get_best_fit_angle(
 
 
 def get_alignment_ops_from_molblock(
-    query_molblock: str, reference: str, atol: float
+    query_molblock: str,
+    reference: str,
+    atol: float,
+    mcs_timeout: float | None = DEFAULT_MCS_TIMEOUT,
 ) -> tuple[list[tuple[int, int]], bool, float]:
     """Compute flips and rotation angle required to align molecule to reference.
 
-    Reference may be molblock or bounding box aspect ratio (e.g., "2:1").
+    Reference may be molblock or bounding box aspect ratio (e.g., "2:1"). `mcs_timeout` limits
+    each MCS search in seconds (None for no limit) and is ignored for ratios.
 
     Returns:
         Tuple of bond flips (bond index and anchor atom index), boolean indicating
@@ -292,6 +322,8 @@ def get_alignment_ops_from_molblock(
         return [], False, get_best_fit_angle(query, ratio)
 
     reference_mol = get_2d_mol(mol_from_molblock(reference), atol=atol)
-    flips, transform = get_alignment_flips_and_transform(query, reference_mol, atol=atol)
+    flips, transform = get_alignment_flips_and_transform(
+        query, reference_mol, atol=atol, mcs_timeout=mcs_timeout
+    )
     global_flip, angle = parse_transform(transform, atol=atol)
     return flips, global_flip, angle

@@ -159,8 +159,8 @@ def test_callback_methods_bypass_the_guard(doc: HighlightBackendMolecule, hml_js
     doc.cleanup_callback()
     doc.cleanup_callback()
 
-    doc.align_to_reference_mol_callback(doc.to_molblock())
-    doc.align_to_reference_mol_callback(doc.to_molblock())
+    doc.align_to_reference_mol_callback(doc.to_molblock(), 60)
+    doc.align_to_reference_mol_callback(doc.to_molblock(), 60)
 
     doc.hide_hydrogens_callback()
     doc.hide_hydrogens_callback()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
@@ -103,6 +103,45 @@ def test_find_mcs(smiles_q: str, smiles_r: str, n_mcs: int) -> None:
         assert q.GetAtomWithIdx(q_idx).GetAtomicNum() == r.GetAtomWithIdx(r_idx).GetAtomicNum()
         assert 0 <= q_idx < q.GetNumAtoms()
         assert 0 <= r_idx < r.GetNumAtoms()
+
+
+def test_find_mcs_passes_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rdkit.Chem import rdFMCS
+
+    seen: list[int] = []
+    real = rdFMCS.FindMCS
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        seen.append(kwargs["timeout"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(rdFMCS, "FindMCS", spy)
+    q, r = _mol("CCO")[0], _mol("CCCO")[0]
+    find_mcs(q, r)
+    find_mcs(q, r, mcs_timeout=2.5)
+    find_mcs(q, r, mcs_timeout=None)
+    assert seen == [60, 3, 0]
+
+
+def test_find_mcs_warns_and_keeps_partial_result_on_timeout(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from rdkit.Chem import rdFMCS
+
+    real = rdFMCS.FindMCS
+
+    class Canceled:
+        def __init__(self, result: Any) -> None:
+            self.smartsString = result.smartsString
+            self.numAtoms = result.numAtoms
+            self.canceled = True
+
+    monkeypatch.setattr(rdFMCS, "FindMCS", lambda *a, **k: Canceled(real(*a, **k)))
+    q, r = _mol("CCO")[0], _mol("CCCO")[0]
+    with caplog.at_level("WARNING", logger="chem_highlighter.align"):
+        mapping = find_mcs(q, r, mcs_timeout=1)
+    assert len(mapping) == 3
+    assert "timed out" in caplog.text
 
 
 @pytest.mark.parametrize(
